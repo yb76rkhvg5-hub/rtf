@@ -6,12 +6,12 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="RTF">
+<meta name="apple-mobile-web-app-title" content="RoadToFTP">
 <meta name="theme-color" content="#f6f6f4">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="icon" href="icon-192.png">
-<title>RTF – RoadToFTP</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<title>RoadToFTP</title>
 <style>
   :root { color-scheme: light;
           --bg:#f6f6f4; --card:#ffffff; --ink:#111214; --muted:#6b6b66; --line:#e6e5e0; --soft:#f0efec;
@@ -164,7 +164,12 @@
 
   /* Kopfzeile & Menü */
   header { display:flex; align-items:center; justify-content:space-between; }
-  header h1 span:empty { display:none; }
+  header h1 { display:flex; align-items:center; gap:9px; font-weight:500; }
+  header h1 .logo { width:28px; height:28px; border-radius:7px; display:block; box-shadow:0 0 0 1px var(--line); }
+  header h1 #brand { color:var(--ink); margin:0; font-weight:500; letter-spacing:-.01em; }
+  header h1 #brand b { font-weight:800; }
+  header h1 #pageTitle { color:var(--ink); margin:0; font-weight:600; }
+  header h1 span:empty, header h1 [hidden] { display:none; }
   .iconbtn { background:none; border:0; color:var(--ink); width:40px; height:40px; display:inline-flex; align-items:center; justify-content:center;
              border-radius:8px; cursor:pointer; padding:0; }
   .iconbtn svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
@@ -212,7 +217,7 @@
 </head>
 <body>
 <header>
-  <h1>RTF<span id="pageTitle"></span></h1>
+  <h1><img class="logo" src="logo.svg" alt=""><span id="brand">RoadTo<b>FTP</b></span><span id="pageTitle"></span></h1>
   <div class="menu">
     <button id="menuBtn" class="iconbtn" aria-label="Menü" aria-haspopup="true" aria-expanded="false">
       <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
@@ -415,10 +420,10 @@
 
 <dialog id="dlg"><div id="dlgBody"></div><p style="text-align:right;margin-bottom:0"><button class="btn sec" onclick="document.getElementById('dlg').close()">Schließen</button></p></dialog>
 
-<script src="planner.js?v=8"></script>
-<script src="charts.js?v=8"></script>
-<script src="analysis.js?v=8"></script>
-<script src="calendar.js?v=8"></script>
-<script src="app.js?v=8"></script>
+<script src="planner.js?v=9"></script>
+<script src="charts.js?v=9"></script>
+<script src="analysis.js?v=9"></script>
+<script src="calendar.js?v=9"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

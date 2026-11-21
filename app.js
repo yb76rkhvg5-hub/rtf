@@ -57,7 +57,8 @@ function show(id) {
   if (!TITLES[id]) id = "plan";
   document.querySelectorAll("nav button, .menu button[data-s]").forEach(b => b.classList.toggle("active", b.dataset.s === id));
   document.querySelectorAll("main > section").forEach(s => s.classList.toggle("active", s.id === id));
-  $("pageTitle").textContent = id === "plan" || id === "analyse" ? "" : TITLES[id];
+  const sub = id === "plan" || id === "analyse" ? "" : TITLES[id];
+  $("pageTitle").textContent = sub; $("brand").hidden = !!sub; // Unterseiten zeigen ihren Titel statt des Namens
   history.replaceState(null, "", "#" + id);
   window.scrollTo(0, 0);
   closeMenu();

@@ -1,6 +1,6 @@
 {
-  "name": "RTF – RoadToFTP",
-  "short_name": "RTF",
+  "name": "RoadToFTP",
+  "short_name": "RoadToFTP",
   "description": "Trainingsplan nach Leistung, Zwift-Workouts und Kalender",
   "lang": "de",
   "start_url": "./",

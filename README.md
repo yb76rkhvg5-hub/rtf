@@ -8,13 +8,12 @@ Läuft komplett im Browser; alle Daten bleiben auf dem Gerät (localStorage), ke
 - `index.html` – Oberfläche (iPhone-optimiert, Dark Mode, Tab-Leiste unten)
 - `planner.js` – Periodisierung, Workout-Bibliothek, Export als ZWO / ICS / intervals.icu-Workout-Text
 - `app.js` – Speicher, intervals.icu-API, Strava-OAuth, Bedienung
-- `sw.js`, `manifest.webmanifest`, `icons/` – Offline-Betrieb und Home-Bildschirm-Symbol
+- `sw.js`, `manifest.webmanifest`, `*.png` – Offline-Betrieb und Home-Bildschirm-Symbol
 
 ## Veröffentlichen über GitHub Pages (einmalig, ohne Programme)
 1. Auf https://github.com anmelden → **New repository**, Name z. B. `rtf`, Sichtbarkeit **Public**
    (GitHub Pages ist im kostenlosen Tarif nur für öffentliche Repositories verfügbar; der Code enthält keine persönlichen Daten).
-2. Im neuen Repository **Add file → Upload files**, alle Dateien und den Ordner `icons` aus diesem Ordner
-   hineinziehen (ohne `README.md` geht auch), **Commit changes**.
+2. Im neuen Repository **Add file → Upload files**, alle Dateien aus diesem Ordner hineinziehen, **Commit changes**.
 3. **Settings → Pages → Branch: main / (root) → Save**. Nach 1–2 Minuten ist die App unter
    `https://<dein-name>.github.io/rtf/` erreichbar.
 4. Auf dem iPhone diese Adresse in **Safari** öffnen → Teilen-Symbol → **Zum Home-Bildschirm**.

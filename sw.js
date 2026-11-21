@@ -1,7 +1,7 @@
 // RTF – RoadToFTP Service Worker: App offline verfügbar machen (API-Aufrufe gehen immer ins Netz)
-const CACHE = "rtf-v1";
+const CACHE = "rtf-v2";
 const FILES = ["./", "index.html", "app.js", "planner.js", "manifest.webmanifest",
-               "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
+               "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

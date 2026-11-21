@@ -7,8 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="RTF">
-<meta name="theme-color" content="#f6f6f4" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f6f6f4">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon-192.png">
@@ -18,20 +17,25 @@
           --bg:#f6f6f4; --card:#ffffff; --ink:#111214; --muted:#6b6b66; --line:#e6e5e0; --soft:#f0efec;
           --acc:#111214; --acc-ink:#ffffff; --link:#2a78d6; --focus:#2a78d6;
           --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px);
-          /* Workout-Profile: eine Farbe, hell -> dunkel nach Intensität */
-          --z1:#d5d4ce; --z2:#9ec5f4; --z3:#5598e7; --z4:#2a78d6; --z5:#1c5cab; --z6:#0d366b;
+          /* Workout-Profile in Zwift-Zonenfarben (Z1 grau, Z2 blau, Z3 grün, Z4 gelb, Z5 orange, Z6 rot) */
+          --z1:#7f7f7f; --z2:#338cff; --z3:#59bf59; --z4:#ffcc3f; --z5:#ff6639; --z6:#ff330c;
           /* Diagrammfarben: Kategorien (feste Reihenfolge), Intensitätsstufen, Raster */
           --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --q1:#86b6ef; --q2:#2a78d6; --q3:#104281;
           --grid:#e1e0d9; --axis:#c3c2b7; --axtext:#898781;
           --st-good:#0ca30c; --st-warning:#fab219; --st-serious:#ec835a; --st-critical:#d03b3b; }
+  /* Dunkel: automatisch nach iPhone-Einstellung oder fest über das Menü (data-theme) */
   @media (prefers-color-scheme: dark) {
-    :root { color-scheme: dark;
+    :root:not([data-theme="light"]) { color-scheme: dark;
             --bg:#0d0d0d; --card:#1a1a19; --ink:#f0efec; --muted:#a3a29b; --line:#2c2c2a; --soft:#232322;
             --acc:#f0efec; --acc-ink:#111214; --link:#6da7ec; --focus:#6da7ec;
-            --z1:#4a4a46; --z2:#184f95; --z3:#256abf; --z4:#3987e5; --z5:#6da7ec; --z6:#b7d3f6;
             --s1:#3987e5; --s2:#d95926; --s3:#199e70; --q1:#184f95; --q2:#3987e5; --q3:#9ec5f4;
             --grid:#2c2c2a; --axis:#383835; }
   }
+  :root[data-theme="dark"] { color-scheme: dark;
+          --bg:#0d0d0d; --card:#1a1a19; --ink:#f0efec; --muted:#a3a29b; --line:#2c2c2a; --soft:#232322;
+          --acc:#f0efec; --acc-ink:#111214; --link:#6da7ec; --focus:#6da7ec;
+          --s1:#3987e5; --s2:#d95926; --s3:#199e70; --q1:#184f95; --q2:#3987e5; --q3:#9ec5f4;
+          --grid:#2c2c2a; --axis:#383835; }
   * { box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin:0; background:var(--bg); color:var(--ink); }
   body { font:15px/1.5 -apple-system, system-ui, "Segoe UI", sans-serif; padding-bottom: calc(64px + var(--safe-b)); -webkit-font-smoothing:antialiased; }
@@ -157,10 +161,75 @@
   .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; vertical-align:1px; }
   .dot.good { background:var(--st-good); } .dot.warning { background:var(--st-warning); }
   .dot.serious { background:var(--st-serious); } .dot.critical { background:var(--st-critical); }
+
+  /* Kopfzeile & Menü */
+  header { display:flex; align-items:center; justify-content:space-between; }
+  header h1 span:empty { display:none; }
+  .iconbtn { background:none; border:0; color:var(--ink); width:40px; height:40px; display:inline-flex; align-items:center; justify-content:center;
+             border-radius:8px; cursor:pointer; padding:0; }
+  .iconbtn svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .iconbtn:active { background:var(--soft); }
+  .menu { position:relative; margin-right:-8px; }
+  .menu-panel { position:absolute; right:0; top:44px; min-width:230px; background:var(--card); border:1px solid var(--line); border-radius:12px;
+                box-shadow:0 12px 32px #0003; padding:6px; z-index:20; }
+  .menu-panel > button { display:block; width:100%; text-align:left; background:none; border:0; color:var(--ink); font:inherit; font-size:15px;
+                         padding:11px 12px; border-radius:8px; cursor:pointer; }
+  .menu-panel > button:active, .menu-panel > button.active { background:var(--soft); }
+  .menu-sep { height:1px; background:var(--line); margin:6px 4px; }
+  .menu-label { font-size:12px; color:var(--muted); padding:4px 12px 6px; }
+  .seg { display:inline-flex; background:var(--soft); border-radius:9px; padding:2px; gap:2px; }
+  .seg button { background:none; border:0; color:var(--muted); font:inherit; font-size:13px; font-weight:500; padding:6px 12px; border-radius:7px; cursor:pointer; }
+  .seg button.active { background:var(--card); color:var(--ink); box-shadow:0 1px 2px #0002; }
+  .menu-panel .seg { display:flex; margin:0 6px 6px; } .menu-panel .seg button { flex:1; }
+
+  /* Plan */
+  .plan-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin:2px 2px 12px; }
+  .plan-head h2 { margin:0; font-size:20px; font-weight:700; letter-spacing:-.015em; }
+  .plan-nav { display:flex; align-items:center; gap:4px; margin:0 0 10px; }
+  .plan-nav #navLabel { flex:1; text-align:center; font-size:15px; }
+  .linkbtn { background:none; border:0; color:var(--link); font:inherit; font-size:14px; padding:8px; cursor:pointer; }
+  .wrow { display:grid; grid-template-columns:52px 1fr; gap:10px; padding:11px 0; border-top:1px solid var(--line); cursor:pointer; }
+  .wrow.rest { cursor:default; }
+  .wrow .wd { display:flex; flex-direction:column; line-height:1.25; }
+  .wrow .wd b { font-size:14px; } .wrow .wd span { font-size:12px; color:var(--muted); }
+  .wrow.today .wd b { color:var(--link); }
+  .wrow.past { opacity:.45; }
+  .wn { font-weight:600; font-size:14.5px; }
+  .wm { font-size:12.5px; color:var(--muted); margin:1px 0 6px; }
+  .wnote { font-size:12px; color:var(--muted); margin-top:5px; padding-left:8px; border-left:2px solid var(--st-warning); }
+  .month { display:grid; grid-template-columns:repeat(7, 1fr); gap:3px; }
+  .mh { font-size:11px; color:var(--muted); text-align:center; padding-bottom:4px; }
+  .mc { min-height:58px; border-radius:6px; padding:4px; background:var(--soft); display:flex; flex-direction:column; gap:3px; overflow:hidden; }
+  .mc.empty { background:none; }
+  .mc.has { cursor:pointer; }
+  .mc.today { box-shadow: inset 0 0 0 1.5px var(--link); }
+  .mc.past { opacity:.5; }
+  .mn { font-size:11px; font-weight:600; }
+  .mt { font-size:10px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .mc svg.prof { border-radius:2px; }
+  p.status { font-size:13px; padding:9px 12px; background:var(--soft); border-radius:8px; }
 </style>
 </head>
 <body>
-<header><h1>RTF<span>RoadToFTP</span></h1></header>
+<header>
+  <h1>RTF<span id="pageTitle"></span></h1>
+  <div class="menu">
+    <button id="menuBtn" class="iconbtn" aria-label="Menü" aria-haspopup="true" aria-expanded="false">
+      <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+    <div id="menu" class="menu-panel" hidden>
+      <button data-s="ziel">Ziel &amp; Profil</button>
+      <button data-s="daten">Leistung &amp; Daten</button>
+      <button data-s="kalender">Kalender-Automatik</button>
+      <button data-s="export">Export</button>
+      <div class="menu-sep"></div>
+      <div class="menu-label">Darstellung</div>
+      <div class="seg" id="themeSeg">
+        <button data-t="auto">Auto</button><button data-t="light">Hell</button><button data-t="dark">Dunkel</button>
+      </div>
+    </div>
+  </div>
+</header>
 
 <main>
 <!-- ZIEL -->
@@ -207,18 +276,59 @@
 
 <!-- PLAN -->
 <section id="plan">
-  <div class="card">
-    <h2 id="planTitle">Noch kein Plan</h2>
-    <div class="muted" id="planSub"></div>
-    <div class="row" style="margin-top:10px">
-      <button class="btn" data-generate="planMsg">Plan neu berechnen</button>
-      <button class="btn sec" id="todayBtn">Zur aktuellen Woche</button>
-    </div>
-    <div id="planMsg"></div>
+  <div class="plan-head">
+    <div><h2 id="planTitle">Noch kein Plan</h2><div class="muted" id="planSub"></div></div>
+    <div class="seg" id="viewSeg"><button data-v="week">Woche</button><button data-v="month">Monat</button><button data-v="all">Alle</button></div>
+  </div>
+  <div class="plan-nav" id="planNav">
+    <button class="iconbtn" id="navPrev" aria-label="Zurück"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <div id="navLabel"></div>
+    <button class="linkbtn" id="navToday">Heute</button>
+    <button class="iconbtn" id="navNext" aria-label="Weiter"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
   </div>
   <div id="weeks"></div>
+  <button class="btn sec block" data-generate="planMsg">Plan neu berechnen</button>
+  <div id="planMsg"></div>
 </section>
 
+<!-- KALENDER -->
+<section id="kalender">
+  <div class="card" id="calCard">
+    <h2>Kalender-Automatik</h2>
+    <p class="muted">RTF legt die Einheiten der nächsten 14 Tage automatisch in freie Zeitfenster deines iPhone-Kalenders: Uhrzeit verschieben, bei wenig Zeit kürzen, sonst auf einen freien Tag derselben Woche legen. Intensive Einheiten bekommen die besten Fenster. Danach wird der Plan automatisch an intervals.icu, Zwift und Garmin gesendet.</p>
+    <p class="status" id="calStatus"></p>
+    <div class="grid">
+      <div><label for="calEarliest">Frühester Start</label><input type="time" id="calEarliest"></div>
+      <div><label for="calLatest">Spätestes Ende</label><input type="time" id="calLatest"></div>
+      <div><label for="calBuffer">Puffer um Termine (min)</label><input type="number" inputmode="numeric" id="calBuffer" min="0" step="5"></div>
+    </div>
+    <label class="chip" style="display:inline-flex;margin-top:12px"><input type="checkbox" id="calAuto"> Änderungen automatisch an intervals.icu senden</label>
+    <div class="row" style="margin-top:12px">
+      <button class="btn" id="calSync">Jetzt prüfen</button>
+      <button class="btn sec" id="calTest">Übertragung testen</button>
+    </div>
+    <div id="calMsg"></div>
+    <h3>Letzte Anpassungen</h3>
+    <div id="calLog"></div>
+  </div>
+  <div class="card">
+    <h2>Kurzbefehl einrichten</h2>
+    <p class="muted">Einmalig in der App „Kurzbefehle“. Übertragen werden nur Beginn und Ende deiner Termine – keine Titel, Orte oder Teilnehmer. Ganztägige Termine ignoriert RTF.</p>
+    <ol class="steps">
+      <li>Kurzbefehle öffnen → <b>+</b> → Name <b>RTF Kalender</b>.</li>
+      <li>Aktion <b>Kalenderereignisse suchen</b> hinzufügen. Filter: <i>Startdatum</i> · <i>liegt in den nächsten</i> · <b>14 Tage</b>. Sortieren nach <i>Startdatum</i>, Limit aus.</li>
+      <li>Aktion <b>Wiederholen mit jedem</b> hinzufügen (Eingabe: Kalenderereignisse).</li>
+      <li>Innerhalb der Wiederholung Aktion <b>Text</b> mit Inhalt: <code>Wiederholungsobjekt.Startdatum</code> <b>|</b> <code>Wiederholungsobjekt.Enddatum</code>. Bei beiden Datumsvariablen antippen → Datumsformat <b>ISO 8601</b>, <b>Zeit einbeziehen</b> an.</li>
+      <li>Nach <i>Ende der Wiederholung</i>: Aktion <b>Text kombinieren</b> (Wiederholungsergebnisse) mit <b>Neue Zeilen</b>.</li>
+      <li>Aktion <b>Inhalt von URL abrufen</b>: URL <code>https://intervals.icu/api/v1/athlete/0/events</code> · Methode <b>POST</b> · Header <code>Authorization</code> = Wert unten · Anfragetext <b>JSON</b> mit den Textfeldern:
+        <code>category</code> = <code>NOTE</code>, <code>start_date_local</code> = <code>2000-01-01T00:00:00</code>, <code>name</code> = <code>RTF Kalender</code>, <code>description</code> = <i>Kombinierter Text</i>.</li>
+      <li>Tab <b>Automation</b> → <b>+</b> → <b>Tageszeit</b> 05:00, täglich → <b>Sofort ausführen</b> → Kurzbefehl <b>RTF Kalender</b>. Optional eine zweite Automation um 12:00.</li>
+    </ol>
+    <label for="calHeader">Wert für den Header „Authorization“</label>
+    <div class="row"><input id="calHeader" readonly style="flex:1"><button class="btn sec" id="calCopy">Kopieren</button></div>
+    <p class="muted">Enthält deinen intervals.icu-Schlüssel – nicht weitergeben. Nach dem ersten Lauf des Kurzbefehls hier auf „Jetzt prüfen“ tippen.</p>
+  </div>
+</section>
 <!-- DATEN -->
 <section id="daten">
   <div class="card">
@@ -299,18 +409,16 @@
 </main>
 
 <nav>
-  <button data-s="ziel"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/></svg>Ziel</button>
   <button data-s="plan"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></svg>Plan</button>
   <button data-s="analyse"><svg viewBox="0 0 24 24"><path d="M4 20h16M7 16v-5M12 16V6M17 16v-8"/></svg>Analyse</button>
-  <button data-s="daten"><svg viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 5 12 2.5-6h4"/></svg>Leistung</button>
-  <button data-s="export"><svg viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13"/></svg>Export</button>
 </nav>
 
 <dialog id="dlg"><div id="dlgBody"></div><p style="text-align:right;margin-bottom:0"><button class="btn sec" onclick="document.getElementById('dlg').close()">Schließen</button></p></dialog>
 
-<script src="planner.js?v=7"></script>
-<script src="charts.js?v=7"></script>
-<script src="analysis.js?v=7"></script>
-<script src="app.js?v=7"></script>
+<script src="planner.js?v=8"></script>
+<script src="charts.js?v=8"></script>
+<script src="analysis.js?v=8"></script>
+<script src="calendar.js?v=8"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>

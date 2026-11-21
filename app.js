@@ -22,7 +22,10 @@ const DEFAULTS = {
   strava: {},
   performance: null,
   wellness: [],
-  plan: null,
+  plan: null,       // angezeigter Plan (an Termine angepasst)
+  planBase: null,   // erzeugter Plan ohne Kalenderanpassung
+  cal: {},
+  ui: { theme: "auto", planView: "week", weekOffset: 0, monthOffset: 0 },
   lastSync: null,
 };
 
@@ -30,7 +33,11 @@ let S = load();
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY));
-    if (s) return { ...structuredClone(DEFAULTS), ...s, settings: { ...DEFAULTS.settings, ...s.settings } };
+    if (s) {
+      const st = { ...structuredClone(DEFAULTS), ...s, settings: { ...DEFAULTS.settings, ...s.settings }, ui: { ...DEFAULTS.ui, ...(s.ui || {}) } };
+      if (st.plan && !st.planBase) st.planBase = st.plan; // ältere Versionen
+      return st;
+    }
   } catch (e) { /* defekte Daten -> Standard */ }
   return structuredClone(DEFAULTS);
 }
@@ -44,15 +51,41 @@ function busy(btn, on, label) {
 }
 const todayIso = () => isoDate(new Date());
 
-// ================================================================ Navigation
+// ================================================================ Navigation & Darstellung
+const TITLES = { plan: "Plan", analyse: "Analyse", ziel: "Ziel & Profil", daten: "Leistung & Daten", kalender: "Kalender-Automatik", export: "Export" };
 function show(id) {
-  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.s === id));
+  if (!TITLES[id]) id = "plan";
+  document.querySelectorAll("nav button, .menu button[data-s]").forEach(b => b.classList.toggle("active", b.dataset.s === id));
   document.querySelectorAll("main > section").forEach(s => s.classList.toggle("active", s.id === id));
+  $("pageTitle").textContent = id === "plan" || id === "analyse" ? "" : TITLES[id];
   history.replaceState(null, "", "#" + id);
   window.scrollTo(0, 0);
+  closeMenu();
   if (id === "analyse") renderAnalysis(); // Diagramme brauchen die sichtbare Breite
 }
-document.querySelectorAll("nav button").forEach(b => b.onclick = () => show(b.dataset.s));
+document.querySelectorAll("nav button, .menu button[data-s]").forEach(b => b.onclick = () => show(b.dataset.s));
+
+function openMenu() { $("menu").hidden = false; $("menuBtn").setAttribute("aria-expanded", "true"); }
+function closeMenu() { if ($("menu")) { $("menu").hidden = true; $("menuBtn").setAttribute("aria-expanded", "false"); } }
+$("menuBtn").onclick = e => { e.stopPropagation(); $("menu").hidden ? openMenu() : closeMenu(); };
+document.addEventListener("click", e => { if (!e.target.closest(".menu")) closeMenu(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
+
+function applyTheme() {
+  const t = S.ui.theme;
+  if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+  else delete document.documentElement.dataset.theme;
+  const dark = t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.querySelector('meta[name="theme-color"]').setAttribute("content", dark ? "#0d0d0d" : "#f6f6f4");
+  document.querySelectorAll("#themeSeg button").forEach(b => b.classList.toggle("active", b.dataset.t === (t || "auto")));
+}
+document.querySelectorAll("#themeSeg button").forEach(b => b.onclick = e => {
+  e.stopPropagation();
+  S.ui.theme = b.dataset.t; save(); applyTheme();
+  if ($("analyse").classList.contains("active")) renderAnalysis(); // Diagrammfarben neu
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", applyTheme);
+applyTheme();
 
 // ================================================================ Formular
 function renderForm() {
@@ -96,9 +129,12 @@ function collect() {
 
 function generate(fromEl) {
   try {
-    S.settings = collect();
-    S.plan = generatePlan(S.settings, S.performance);
+    S.settings = { ...collect(), cal: S.settings.cal };
+    S.planBase = generatePlan(S.settings, S.performance);
+    applyCalendar();
+    S.ui.weekOffset = 0; S.ui.monthOffset = 0;
     save(); renderAll(); show("plan");
+    autoCalendarSync(); // Termine prüfen und automatisch an intervals.icu senden
   } catch (e) { msg(fromEl || "zielMsg", esc(e.message), false); }
 }
 
@@ -335,7 +371,8 @@ window.takeFtp = v => {
 };
 
 // ================================================================ Plan
-function zoneColor(p) { return p < 0.56 ? "var(--z1)" : p < 0.76 ? "var(--z2)" : p < 0.88 ? "var(--z3)" : p < 1.0 ? "var(--z4)" : p < 1.2 ? "var(--z5)" : "var(--z6)"; }
+// Zwift-Zonen: Z1 < 60 % grau · Z2 60–75 % blau · Z3 76–89 % grün · Z4 90–104 % gelb · Z5 105–118 % orange · Z6 ≥ 119 % rot
+function zoneColor(p) { return p < 0.60 ? "var(--z1)" : p < 0.76 ? "var(--z2)" : p < 0.90 ? "var(--z3)" : p < 1.05 ? "var(--z4)" : p < 1.19 ? "var(--z5)" : "var(--z6)"; }
 function profile(segs, h = 38) {
   const flat = [];
   for (const s of segs) {
@@ -354,29 +391,88 @@ function profile(segs, h = 38) {
   }
   return `<svg class="prof" style="height:${h}px" viewBox="0 0 300 ${h}" preserveAspectRatio="none">${out}</svg>`;
 }
+const MONTH_NAMES = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+const dm = iso => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.`;
+function weekOfToday(P) {
+  const t = todayIso();
+  const i = P.weeks.findIndex(w => w.start <= t && t < isoDate(addDays(parseDate(w.start), 7)));
+  return i >= 0 ? i : t < P.weeks[0].start ? 0 : P.weeks.length - 1;
+}
+function kw(iso) { // ISO-Kalenderwoche
+  const d = parseDate(iso); d.setDate(d.getDate() + 3 - weekdayMon0(d));
+  const w1 = new Date(d.getFullYear(), 0, 4);
+  return 1 + Math.round(((d - w1) / 864e5 - 3 + weekdayMon0(w1)) / 7);
+}
+
 function renderPlan() {
-  const P = S.plan;
+  const P = S.plan, view = S.ui.planView || "week";
+  document.querySelectorAll("#viewSeg button").forEach(b => b.classList.toggle("active", b.dataset.v === view));
   if (!P) {
     $("planTitle").textContent = "Noch kein Plan";
     $("planSub").textContent = "";
-    $("weeks").innerHTML = `<div class="card muted">Lege Ziel und Trainingstage fest und tippe auf „Plan erstellen“.</div>`;
+    $("planNav").hidden = true;
+    $("weeks").innerHTML = `<div class="card muted">Lege im Menü unter „Ziel & Profil“ dein Ziel und deine Trainingstage fest und erstelle den Plan.</div>`;
     return;
   }
-  $("planTitle").textContent = `${P.goal_label} · ${P.weeks.length} Wochen`;
-  $("planSub").textContent = `FTP ${P.ftp} W · erstellt ${P.generated.replace("T", " ").slice(0, 16)}` + (P.event_date ? ` · Event ${P.event_date}` : "");
+  $("planTitle").textContent = P.goal_label;
+  $("planSub").textContent = `${P.weeks.length} Wochen · FTP ${P.ftp} W` + (P.event_date ? ` · Event ${dm(P.event_date)}` : "");
   const today = todayIso();
-  $("weeks").innerHTML = P.weeks.map(w => {
-    const current = w.start <= today && today < isoDate(addDays(parseDate(w.start), 7));
-    return `<div class="card week ${current ? "current" : ""}" ${current ? 'id="currentWeek"' : ""}><div class="week-head">
-      <b>Woche ${w.index}</b><span class="phase ph-${w.phase}">${w.phase_label}</span>
-      <span class="muted">ab ${w.start.slice(8, 10)}.${w.start.slice(5, 7)}. · ${w.hours} h · ~${w.tss} TSS</span></div>
-      <div class="days">${w.days.map(d => `<div class="day ${d.date < today ? "past" : ""} ${d.date === today ? "today" : ""}" data-id="${d.workout.id}">
-        <div class="d">${d.weekday} ${d.date.slice(8, 10)}.${d.date.slice(5, 7)}.${d.time ? " · " + d.time : ""}</div>
-        <div class="n">${esc(d.workout.name)}</div>${profile(d.workout.segments)}
-        <div class="d">${d.workout.minutes ? d.workout.minutes + " min · TSS " + d.workout.tss : ""}</div></div>`).join("")}</div></div>`;
-  }).join("");
-  document.querySelectorAll(".day").forEach(el => el.onclick = () => detail(el.dataset.id));
+  $("planNav").hidden = view === "all";
+  const dayById = new Map(P.weeks.flatMap(w => w.days.map(d => [d.date, d])));
+
+  if (view === "week") {
+    const i = Math.max(0, Math.min(P.weeks.length - 1, weekOfToday(P) + (S.ui.weekOffset || 0)));
+    const w = P.weeks[i];
+    const end = isoDate(addDays(parseDate(w.start), 6));
+    $("navLabel").innerHTML = `<b>KW ${kw(w.start)}</b> <span class="muted">${dm(w.start)}–${dm(end)}</span>`;
+    let rows = "";
+    for (let k = 0; k < 7; k++) {
+      const iso = isoDate(addDays(parseDate(w.start), k)), d = dayById.get(iso);
+      const cls = `wrow ${iso < today ? "past" : ""} ${iso === today ? "today" : ""}`;
+      const head = `<div class="wd"><b>${WEEKDAYS[k]}</b><span>${dm(iso)}</span></div>`;
+      if (!d) { rows += `<div class="${cls} rest">${head}<div class="wc"><span class="muted">Ruhetag</span></div></div>`; continue; }
+      const o = d.workout;
+      rows += `<div class="${cls}" data-id="${o.id}">${head}<div class="wc">
+        <div class="wn">${esc(o.name)}</div>
+        <div class="wm">${d.time ? d.time + " Uhr" : ""}${o.minutes ? ` · ${o.minutes} min · TSS ${o.tss}` : ""}</div>
+        ${profile(o.segments, 30)}${d.note ? `<div class="wnote">${esc(d.note)}</div>` : ""}</div></div>`;
+    }
+    $("weeks").innerHTML = `<div class="card"><div class="week-head"><span class="phase ph-${w.phase}">${w.phase_label}</span>
+      <span class="muted">Woche ${w.index} von ${P.weeks.length} · ${w.hours} h · ~${w.tss} TSS</span></div>${rows}</div>`;
+  } else if (view === "month") {
+    const base = new Date(); base.setDate(1); base.setMonth(base.getMonth() + (S.ui.monthOffset || 0));
+    const y = base.getFullYear(), m = base.getMonth();
+    $("navLabel").innerHTML = `<b>${MONTH_NAMES[m]} ${y}</b>`;
+    const first = new Date(y, m, 1), lead = weekdayMon0(first), days = new Date(y, m + 1, 0).getDate();
+    let cells = WEEKDAYS.map(n => `<div class="mh">${n}</div>`).join("");
+    for (let k = 0; k < lead; k++) cells += `<div class="mc empty"></div>`;
+    let sumMin = 0, n = 0;
+    for (let dd = 1; dd <= days; dd++) {
+      const iso = isoDate(new Date(y, m, dd)), d = dayById.get(iso);
+      if (d) { sumMin += d.workout.minutes; n++; }
+      cells += `<div class="mc ${iso < today ? "past" : ""} ${iso === today ? "today" : ""} ${d ? "has" : ""}" ${d ? `data-id="${d.workout.id}"` : ""}>
+        <span class="mn">${dd}</span>${d ? `${profile(d.workout.segments, 18)}<span class="mt">${d.workout.minutes ? d.workout.minutes + "′" : "Event"}</span>` : ""}</div>`;
+    }
+    $("weeks").innerHTML = `<div class="card"><div class="month">${cells}</div>
+      <p class="muted" style="margin:12px 0 0">${n} Einheiten · ${Math.round(sumMin / 6) / 10} h geplant</p></div>`;
+  } else {
+    $("weeks").innerHTML = P.weeks.map(w => {
+      const current = w.start <= today && today < isoDate(addDays(parseDate(w.start), 7));
+      return `<div class="card week ${current ? "current" : ""}"><div class="week-head">
+        <b>KW ${kw(w.start)}</b><span class="phase ph-${w.phase}">${w.phase_label}</span>
+        <span class="muted">${dm(w.start)} · ${w.hours} h · ~${w.tss} TSS</span></div>
+        <div class="days">${w.days.map(d => `<div class="day ${d.date < today ? "past" : ""} ${d.date === today ? "today" : ""}" data-id="${d.workout.id}">
+          <div class="d">${d.weekday} ${dm(d.date)}${d.time ? " · " + d.time : ""}</div>
+          <div class="n">${esc(d.workout.name)}</div>${profile(d.workout.segments)}
+          <div class="d">${d.workout.minutes ? d.workout.minutes + " min · TSS " + d.workout.tss : ""}</div></div>`).join("")}</div></div>`;
+    }).join("");
+  }
+  document.querySelectorAll("#weeks [data-id]").forEach(el => el.onclick = () => detail(el.dataset.id));
 }
+document.querySelectorAll("#viewSeg button").forEach(b => b.onclick = () => { S.ui.planView = b.dataset.v; save(); renderPlan(); });
+$("navPrev").onclick = () => { S.ui[S.ui.planView === "month" ? "monthOffset" : "weekOffset"] = (S.ui[S.ui.planView === "month" ? "monthOffset" : "weekOffset"] || 0) - 1; save(); renderPlan(); };
+$("navNext").onclick = () => { S.ui[S.ui.planView === "month" ? "monthOffset" : "weekOffset"] = (S.ui[S.ui.planView === "month" ? "monthOffset" : "weekOffset"] || 0) + 1; save(); renderPlan(); };
+$("navToday").onclick = () => { S.ui.weekOffset = 0; S.ui.monthOffset = 0; save(); renderPlan(); };
 function findDay(id) {
   for (const w of S.plan.weeks) for (const d of w.days) if (d.workout.id === id) return d;
 }
@@ -384,6 +480,7 @@ function detail(id) {
   const d = findDay(id), o = d.workout;
   $("dlgBody").innerHTML = `<h2>${esc(o.name)}</h2>
     <div class="muted">${d.weekday}, ${d.date.slice(8, 10)}.${d.date.slice(5, 7)}.${d.date.slice(0, 4)}${d.time ? " · " + d.time + " Uhr" : ""}${o.minutes ? ` · ${o.minutes} min · TSS ${o.tss} · IF ${o.if}` : ""}</div>
+    ${d.note ? `<p class="wnote">${esc(d.note)}</p>` : ""}
     <p>${esc(o.desc)}</p>${o.segments.length ? profile(o.segments, 80) : ""}
     <ol>${o.structure.map(x => `<li>${esc(x)}</li>`).join("")}</ol>
     ${o.kind === "event" ? "" : `<button class="btn sec" id="zwoBtn">.zwo-Datei für Zwift</button>`}`;
@@ -432,12 +529,15 @@ $("restoreFile").onchange = async e => {
 $("resetBtn").onclick = () => { if (confirm("Alle RTF-Daten auf diesem Gerät löschen?")) { localStorage.removeItem(KEY); S = load(); renderAll(); show("ziel"); } };
 
 // ================================================================ Start
-function renderAll() { renderForm(); renderData(); renderPlan(); renderAnalysis(); }
+function renderAll() { renderForm(); renderData(); renderPlan(); renderCalendar(); if ($("analyse").classList.contains("active")) renderAnalysis(); }
 document.querySelectorAll("[data-generate]").forEach(b => b.onclick = () => generate(b.dataset.generate));
-$("todayBtn").onclick = () => $("currentWeek")?.scrollIntoView({ behavior: "smooth", block: "start" });
+calBindUi();
 
+if (S.planBase) applyCalendar(); // Anpassung an heutiges Datum / gespeicherte Termine
 renderAll();
 const h = location.hash.slice(1);
-show(h && $(h) ? h : (S.plan ? "plan" : "ziel"));
+show(h && TITLES[h] ? h : (S.plan ? "plan" : "ziel"));
 handleOAuthReturn();
+autoCalendarSync(); // Termine holen, Plan anpassen, automatisch senden
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") autoCalendarSync(); });
 if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => {});

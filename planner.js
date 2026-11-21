@@ -112,7 +112,7 @@ function buildWorkout(kind, minutes, level = 0, ftp = 250) {
     desc = `${reps} × ${fmtDur(on)} @ ${Math.round(onp * 100)} % FTP (~${Math.round(onp * ftp)} W), Pause ${fmtDur(d.off)}.`;
   } else throw new Error("Unbekannter Workout-Typ " + kind);
   const [dur, IF, tss] = workoutStats(segs);
-  return { kind, name, desc, segments: segs, minutes: Math.round(dur / 60), if: IF, tss };
+  return { kind, name, desc, segments: segs, minutes: Math.round(dur / 60), if: IF, tss, level };
 }
 
 function describeSegments(segs, ftp) {

@@ -74,6 +74,7 @@ function lineChart(host, opts) {
   const W = Math.max(280, host.clientWidth || 320), H = opts.height || 180;
   const m = { l: 36, r: 10, t: 10, b: 22 };
   const all = opts.series.flatMap(s => s.data);
+  const fmtY = opts.yFmt || String;
   const band = opts.band?.data || [];
   const xs = [...all.map(p => p.x), ...band.map(p => p.x)];
   if (!xs.length) return;
@@ -81,6 +82,7 @@ function lineChart(host, opts) {
   const x0 = Math.min(...xs), x1 = Math.max(...xs);
   const ticks = niceTicks(opts.yMin ?? Math.min(...ys), opts.yMax ?? Math.max(...ys));
   const y0 = ticks[0], y1 = ticks.at(-1);
+  m.l = Math.max(m.l, 10 + 6 * Math.max(...ticks.map(v => String(fmtY(v)).length))); // Platz für Achsenbeschriftung
   const X = t => m.l + (t - x0) / Math.max(1, x1 - x0) * (W - m.l - m.r);
   const Y = v => m.t + (1 - (v - y0) / (y1 - y0 || 1)) * (H - m.t - m.b);
   const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": opts.title || "" }, host);
@@ -104,7 +106,8 @@ function lineChart(host, opts) {
   for (const mk of opts.marks || []) {
     if (mk.x < x0 || mk.x > x1) continue;
     el("line", { x1: X(mk.x), x2: X(mk.x), y1: m.t, y2: H - m.b, class: "viz-mark" }, svg);
-    el("text", { x: X(mk.x) + 3, y: m.t + 9, class: "viz-ax" }, svg).textContent = mk.label;
+    const nearRight = X(mk.x) > W - m.r - 40;
+    el("text", { x: X(mk.x) + (nearRight ? -3 : 3), y: m.t + 9, class: "viz-ax", "text-anchor": nearRight ? "end" : "start" }, svg).textContent = mk.label;
   }
   // Spanne
   if (band.length) {

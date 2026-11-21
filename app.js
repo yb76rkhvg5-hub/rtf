@@ -21,6 +21,7 @@ const DEFAULTS = {
   icu: { key: "", athlete: "0" },
   strava: {},
   performance: null,
+  wellness: [],
   plan: null,
   lastSync: null,
 };
@@ -138,6 +139,13 @@ async function icuLoadPerformance() {
   perf.icu_ftp = ride?.ftp || null;
   perf.icu_weight = ath.icu_weight || ath.weight || null;
   perf.athlete = ath.name || null;
+  // Gesundheitsdaten (z. B. von Garmin) separat speichern – bleiben auch bei späterem Strava-Abruf erhalten
+  const num = v => (v == null || v === "" || isNaN(+v) || +v === 0) ? null : +v;
+  S.wellness = (wellness || []).map(x => ({
+    date: x.id, hrv: num(x.hrv), rhr: num(x.restingHR), sleepH: num(x.sleepSecs) ? +(x.sleepSecs / 3600).toFixed(2) : null,
+    sleepScore: num(x.sleepScore), weight: num(x.weight), vo2max: num(x.vo2max), steps: num(x.steps),
+    bodyFat: num(x.bodyFat), spo2: num(x.spO2), sleepHR: num(x.avgSleepingHR),
+  })).filter(x => Object.entries(x).some(([k, v]) => k !== "date" && v != null));
   return perf;
 }
 
@@ -259,11 +267,13 @@ $("icuLoad").onclick = async e => {
   busy(e.target, true, "Lade …");
   try {
     const perf = await icuLoadPerformance();
+    save(); // Gesundheitsdaten immer übernehmen
+    const wN = (S.wellness || []).length, wTxt = wN ? ` Gesundheitsdaten von ${wN} Tagen.` : "";
     if (!perf.activities) {
       msg("icuMsg", "Verbindung klappt, aber intervals.icu hat noch keine Aktivitäten. Nach dem ersten Verbinden lädt intervals.icu ältere Daten erst nach („Alte Daten herunterladen“ unter Einstellungen → Verbindungen). In ein paar Minuten erneut versuchen. Deine bisherigen Daten bleiben erhalten.", false);
     } else {
       S.performance = perf; S.lastSync = new Date().toISOString(); save(); renderData(); renderAnalysis();
-      msg("icuMsg", `${perf.activities} Aktivitäten der letzten ${DATA_DAYS} Tage geladen.`);
+      msg("icuMsg", `${perf.activities} Aktivitäten der letzten ${DATA_DAYS} Tage geladen.${wTxt}`);
     }
   }
   catch (err) { msg("icuMsg", esc(err.message), false); }

@@ -20,6 +20,103 @@ function tsbStatus(tsb) {
   return { cls: "serious", label: "Sehr erholt – Fitness sinkt" };
 }
 
+// ------------------------------------------------ Erholung & Gesundheit (Garmin über intervals.icu)
+const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+const sd = a => { const m = avg(a); return a.length > 1 ? Math.sqrt(avg(a.map(x => (x - m) ** 2))) : 0; };
+
+/** Kennzahlen je Gesundheitswert: 7-Tage-Schnitt, persönlicher Normalbereich (Tage 8–67 zurück), Verlauf */
+function recoveryStats() {
+  const W = (S.wellness || []).filter(w => w.date >= isoDate(addDays(new Date(), -120))).sort((a, b) => a.date.localeCompare(b.date));
+  const today = new Date(), d7 = isoDate(addDays(today, -7)), d67 = isoDate(addDays(today, -67));
+  const out = {};
+  for (const k of ["hrv", "rhr", "sleepH", "sleepScore", "weight", "vo2max", "steps", "bodyFat"]) {
+    const pts = W.filter(w => w[k] != null).map(w => ({ date: w.date, v: w[k] }));
+    if (!pts.length) continue;
+    const last7 = pts.filter(p => p.date > d7).map(p => p.v);
+    const base = pts.filter(p => p.date <= d7 && p.date > d67).map(p => p.v);
+    // gleitender 7-Tage-Schnitt und gleitender Normalbereich (60 Tage) für die Diagramme
+    const roll = pts.map(p => {
+      const t = ts(p.date);
+      const w7 = pts.filter(q => ts(q.date) > t - 7 * DAY && ts(q.date) <= t).map(q => q.v);
+      const w60 = pts.filter(q => ts(q.date) > t - 67 * DAY && ts(q.date) <= t - 7 * DAY).map(q => q.v);
+      return { x: t, v: p.v, a7: avg(w7), lo: w60.length >= 10 ? avg(w60) - sd(w60) : null, hi: w60.length >= 10 ? avg(w60) + sd(w60) : null };
+    });
+    out[k] = { pts, roll, last: pts.at(-1), avg7: avg(last7), base: base.length >= 10 ? avg(base) : null, sd: base.length >= 10 ? sd(base) : null };
+  }
+  return out;
+}
+
+function renderRecovery(C) {
+  const R = recoveryStats();
+  if (!Object.keys(R).length && !S.icu?.key) return; // ohne intervals.icu keinen leeren Bereich zeigen
+  const c = card("Erholung & Gesundheit", "Von Garmin über intervals.icu. Verglichen wird mit deinem persönlichen Normalbereich (Schnitt ± Streuung der letzten 60 Tage).");
+  if (!Object.keys(R).length) {
+    note(c, "Noch keine Gesundheitsdaten. Unter <b>Leistung → intervals.icu</b> laden. Garmin liefert Schlaf, HRV und Ruhepuls meist ab der nächsten Nacht.");
+    return;
+  }
+  const fmtH = h => `${Math.floor(h)}:${String(Math.round((h % 1) * 60)).padStart(2, "0")} h`;
+  const rel = (s, unit, higherIsGood) => {
+    if (s.avg7 == null) return `letzter Wert ${fmtDate(s.last.date)}`;
+    if (s.base == null) return "Normalbereich wird noch ermittelt";
+    const d = s.avg7 - s.base;
+    if (Math.abs(d) <= (s.sd || 0)) return "im Normalbereich";
+    return `${d > 0 ? "+" : "−"}${r1(Math.abs(d))} ${unit} ${d > 0 ? "über" : "unter"} Normal`;
+  };
+  const tiles = [];
+  if (R.hrv) tiles.push([`${Math.round(R.hrv.avg7 ?? R.hrv.last.v)} ms`, "HRV · 7 Tage", rel(R.hrv, "ms", true)]);
+  if (R.rhr) tiles.push([`${Math.round(R.rhr.avg7 ?? R.rhr.last.v)} bpm`, "Ruhepuls · 7 Tage", rel(R.rhr, "bpm", false)]);
+  if (R.sleepH) tiles.push([fmtH(R.sleepH.avg7 ?? R.sleepH.last.v), "Schlaf · 7 Tage", R.sleepScore?.avg7 ? `Schlafwert ${Math.round(R.sleepScore.avg7)}` : rel(R.sleepH, "h", true)]);
+  if (R.weight) {
+    const p30 = R.weight.pts.filter(p => p.date <= isoDate(addDays(new Date(), -28))).at(-1);
+    tiles.push([`${r1(R.weight.last.v)} kg`, "Gewicht", p30 ? `${R.weight.last.v - p30.v >= 0 ? "+" : "−"}${r1(Math.abs(R.weight.last.v - p30.v))} kg in 4 Wochen` : fmtDate(R.weight.last.date)]);
+  }
+  if (R.vo2max) tiles.push([r1(R.vo2max.last.v), "VO2max", `Stand ${fmtDate(R.vo2max.last.date)}`]);
+  if (R.steps) tiles.push([Math.round(R.steps.avg7 ?? R.steps.last.v).toLocaleString("de-DE"), "Schritte · Ø 7 Tage", ""]);
+  const g = document.createElement("div"); g.className = "kpis";
+  for (const [v, l, sub] of tiles) {
+    const k = document.createElement("div"); k.className = "kpi";
+    const b = document.createElement("b"); b.textContent = v;
+    const sp = document.createElement("span"); sp.textContent = l;
+    k.append(b, sp);
+    if (sub) { const sm = document.createElement("small"); sm.textContent = sub; k.appendChild(sm); }
+    g.appendChild(k);
+  }
+  c.appendChild(g);
+
+  // Verlauf: Tageswerte + 7-Tage-Schnitt (+ Normalbereich), oder bei seltenen Messungen nur die Werte
+  const trend = (key, title, unit, { fmt = v => Math.round(v), smooth = true } = {}) => {
+    const s = R[key];
+    if (!s || s.pts.length < 3) return;
+    const h = document.createElement("h3"); h.textContent = unit ? `${title} (${unit})` : title; c.appendChild(h);
+    const band = smooth ? s.roll.filter(p => p.lo != null) : [];
+    lineChart(chartHost(c), {
+      title, height: 150, yFmt: fmt, marks: [{ x: ts(todayIso()), label: "heute" }],
+      band: band.length ? { name: "Normalbereich", color: C.s1, data: band.map(p => ({ x: p.x, lo: p.lo, hi: p.hi })) } : null,
+      series: smooth ? [
+        { name: "Tageswert", color: C.q1, dots: true, data: s.roll.map(p => ({ x: p.x, y: p.v })) },
+        { name: "7-Tage-Schnitt", color: C.s1, data: s.roll.map(p => ({ x: p.x, y: +p.a7.toFixed(1) })) },
+      ] : [{ name: title, color: C.s1, data: s.roll.map(p => ({ x: p.x, y: p.v })) }],
+    });
+  };
+  trend("hrv", "Herzfrequenzvariabilität", "ms");
+  trend("rhr", "Ruhepuls", "bpm");
+
+  if (R.sleepH) {
+    const days = [];
+    for (let i = 29; i >= 0; i--) {
+      const k = isoDate(addDays(new Date(), -i)), w = (S.wellness || []).find(x => x.date === k);
+      days.push({ label: fmtDate(k).slice(0, 5), value: w?.sleepH ? +w.sleepH.toFixed(1) : 0, color: C.s1, series: "Schlaf",
+        tip: `${fmtDate(k)}${w?.sleepScore ? ` · Schlafwert ${w.sleepScore}` : ""}` });
+    }
+    if (days.some(d => d.value)) {
+      const h = document.createElement("h3"); h.textContent = "Schlaf · letzte 30 Tage"; c.appendChild(h);
+      barChart(chartHost(c), { title: "Schlaf", bars: days, height: 140, yFmt: v => `${v} h` });
+    }
+  }
+  trend("weight", "Gewicht", "kg", { fmt: v => r1(v), smooth: false });
+  trend("vo2max", "VO2max", "", { fmt: v => r1(v), smooth: false });
+}
+
 function card(title, sub) {
   const c = document.createElement("div");
   c.className = "card";
@@ -112,6 +209,9 @@ function renderAnalysisInner() {
       ],
     });
   }
+
+  // ------------------------------------------------ Erholung & Gesundheit
+  renderRecovery(C);
 
   // ------------------------------------------------ Wochenumfang
   {
@@ -253,6 +353,14 @@ function renderAnalysisInner() {
       const kraft = acts.filter(a => a.type === "WeightTraining" && a.date > isoDate(addDays(new Date(), -28))).length;
       if (kraft) add("good", "Kraft", `${r1(kraft / 4)}× Krafttraining pro Woche. Es fließt in Fitness und Ermüdung ein, aber nicht in den Radplan – lege es möglichst auf lockere Tage.`);
     }
+    // Erholung aus Garmin-Daten: HRV unter bzw. Ruhepuls über dem Normalbereich, wenig Schlaf
+    const R = recoveryStats();
+    const low = s => s?.avg7 != null && s.base != null && s.avg7 < s.base - s.sd;
+    const high = s => s?.avg7 != null && s.base != null && s.avg7 > s.base + s.sd;
+    if (low(R.hrv) && high(R.rhr)) add("critical", "Erholung", "HRV unter und Ruhepuls über deinem Normalbereich – typisches Zeichen für Ermüdung oder einen beginnenden Infekt. Die nächsten Tage locker trainieren.");
+    else if (low(R.hrv) || high(R.rhr)) add("warning", "Erholung", `${low(R.hrv) ? "HRV liegt unter" : "Ruhepuls liegt über"} deinem Normalbereich. Harte Einheiten nur, wenn du dich frisch fühlst.`);
+    else if (R.hrv?.base != null) add("good", "Erholung", "HRV und Ruhepuls liegen im Normalbereich – gute Voraussetzungen für intensive Einheiten.");
+    if (R.sleepH?.avg7 != null && R.sleepH.avg7 < 7) add("warning", "Schlaf", `Im Schnitt ${r1(R.sleepH.avg7)} h pro Nacht in den letzten 7 Tagen. Unter 7 h leidet die Anpassung an das Training.`);
     if (plan && Number(plan.ftp) !== Number(st.ftp))
       add("warning", "Plan veraltet", `Der Plan wurde mit FTP ${plan.ftp} W erstellt, eingestellt sind ${st.ftp} W. Bitte „Plan neu berechnen“.`);
     if (plan && S.lastSync && (Date.now() - new Date(S.lastSync)) / DAY > 7)

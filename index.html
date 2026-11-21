@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RTF">
+<meta name="theme-color" content="#1d2330">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<title>RTF – RoadToFTP</title>
+<style>
+  :root { --bg:#f2f3f6; --card:#fff; --ink:#1d2330; --muted:#6b7280; --line:#e3e6eb; --acc:#fc5200;
+          --z1:#9ca3af; --z2:#3b82f6; --z3:#22c55e; --z4:#eab308; --z5:#f97316; --z6:#ef4444;
+          --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px); }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1218; --card:#1a1f29; --ink:#e8eaee; --muted:#9aa3b2; --line:#2b3240; }
+    input, select { color-scheme: dark; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin:0; background:var(--bg); color:var(--ink); }
+  body { font:16px/1.45 -apple-system, system-ui, "Segoe UI", sans-serif; padding-bottom: calc(70px + var(--safe-b)); }
+  header { position:sticky; top:0; z-index:5; background:#1d2330; color:#fff; padding: calc(10px + var(--safe-t)) 16px 10px; }
+  header h1 { font-size:18px; margin:0; } header h1 span { color:var(--acc); }
+  nav { position:fixed; bottom:0; left:0; right:0; z-index:5; display:flex; background:var(--card); border-top:1px solid var(--line);
+        padding-bottom: var(--safe-b); }
+  nav button { flex:1; background:none; border:0; color:var(--muted); font:inherit; font-size:11px; padding:8px 2px 6px; cursor:pointer;
+               display:flex; flex-direction:column; align-items:center; gap:2px; }
+  nav button i { font-style:normal; font-size:21px; line-height:1; }
+  nav button.active { color:var(--acc); }
+  main { max-width:1000px; margin:0 auto; padding:14px; }
+  main > section { display:none; } main > section.active { display:block; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px; }
+  .card h2 { margin:0 0 10px; font-size:17px; } h3 { font-size:15px; margin:16px 0 8px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px 14px; }
+  label { display:block; font-size:13px; color:var(--muted); margin-bottom:3px; }
+  input, select { width:100%; padding:10px; border:1px solid var(--line); border-radius:10px; font:inherit; font-size:16px;
+                  background:var(--card); color:var(--ink); min-height:44px; }
+  input[type=checkbox], input[type=radio] { width:auto; min-height:0; accent-color:var(--acc); transform:scale(1.2); }
+  .btn { background:var(--acc); color:#fff; border:0; padding:12px 18px; border-radius:10px; font:inherit; font-weight:600; cursor:pointer; min-height:44px; }
+  .btn.sec { background:var(--card); color:var(--ink); border:1px solid var(--line); }
+  .btn.sm { padding:6px 10px; min-height:0; font-size:13px; font-weight:500; }
+  .btn.danger { background:#b91c1c; }
+  .btn:disabled { opacity:.5; }
+  .btn.block { width:100%; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { border:1px solid var(--line); border-radius:20px; padding:8px 12px; display:flex; gap:8px; align-items:center; font-size:14px; color:var(--ink); margin:0; }
+  .dayrow { display:grid; grid-template-columns: 1fr 70px auto 96px auto; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid var(--line); }
+  .dayrow:last-child { border:0; }
+  .dayrow .sw { display:flex; gap:8px; align-items:center; color:var(--ink); font-size:15px; margin:0; }
+  .dayrow input[type=number], .dayrow input[type=time] { padding:8px 6px; }
+  .dayrow label.muted { margin:0; display:flex; gap:4px; align-items:center; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; }
+  .kpi { border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  .kpi b { display:block; font-size:21px; } .kpi span { color:var(--muted); font-size:12px; }
+  .muted { color:var(--muted); font-size:13px; }
+  .bars { display:flex; gap:4px; align-items:flex-end; height:105px; }
+  .bars > div { flex:1; text-align:center; font-size:10px; color:var(--muted); }
+  .bars > div > div { background:#3b82f6; border-radius:4px 4px 0 0; }
+  .tbl { overflow-x:auto; } table { border-collapse:collapse; width:100%; }
+  td, th { padding:6px; border-bottom:1px solid var(--line); text-align:left; font-size:13px; }
+  .week-head { display:flex; gap:10px; align-items:baseline; margin-bottom:8px; flex-wrap:wrap; }
+  .week.current { border-color:var(--acc); }
+  .phase { font-size:12px; padding:2px 9px; border-radius:10px; color:#fff; }
+  .ph-base{background:#3b82f6}.ph-build{background:#f97316}.ph-peak{background:#ef4444}.ph-taper{background:#8b5cf6}.ph-recovery{background:#22c55e}.ph-test{background:#6b7280}
+  .days { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px; }
+  @media (max-width:520px) { .days { grid-template-columns:1fr 1fr; } }
+  .day { border:1px solid var(--line); border-radius:10px; padding:8px; cursor:pointer; }
+  .day.today { border:2px solid var(--acc); }
+  .day .d { font-size:12px; color:var(--muted); } .day .n { font-weight:600; font-size:14px; margin:2px 0 4px; }
+  .day.past { opacity:.5; }
+  svg.prof { width:100%; display:block; border-radius:4px; }
+  .trophy { display:flex; align-items:center; font-size:26px; }
+  dialog { border:0; border-radius:16px; width:94%; max-width:600px; padding:18px; background:var(--card); color:var(--ink); }
+  dialog::backdrop { background:#0008; }
+  dialog h2 { margin-top:0; }
+  dialog ol { padding-left:20px; font-size:14px; }
+  .msg { padding:10px 12px; border-radius:10px; margin-top:10px; font-size:14px; word-break:break-word; }
+  .ok { background:#e8f7ee; color:#14532d; } .err { background:#fde8e8; color:#7f1d1d; }
+  code { background:#8882; padding:1px 5px; border-radius:4px; font-size:13px; }
+  details summary { cursor:pointer; }
+  a { color:var(--acc); }
+  ol.steps { padding-left:20px; font-size:14px; } ol.steps li { margin-bottom:4px; }
+</style>
+</head>
+<body>
+<header><h1><span>RTF</span> – RoadToFTP</h1></header>
+
+<main>
+<!-- ZIEL -->
+<section id="ziel">
+  <div class="card">
+    <h2>Trainingsziel</h2>
+    <div class="grid">
+      <div><label for="goal_type">Zieltyp</label><select id="goal_type"></select></div>
+      <div><label for="goal_name">Eigener Name (optional)</label><input id="goal_name" placeholder="z. B. 250 Watt bis Mai"></div>
+      <div><label for="event_date">Event-/Zieldatum (optional)</label><input type="date" id="event_date"></div>
+      <div><label for="target_ftp">Ziel-FTP in Watt (optional)</label><input type="number" inputmode="numeric" id="target_ftp"></div>
+      <div><label for="start_date">Planstart</label><input type="date" id="start_date"></div>
+      <div><label for="plan_weeks">Planlänge in Wochen (ohne Datum)</label><input type="number" inputmode="numeric" id="plan_weeks" min="4" max="30"></div>
+      <div><label for="style">Intensitätsverteilung</label>
+        <select id="style">
+          <option value="pyramidal">Pyramidal (ausgewogen)</option>
+          <option value="polarized">Polarisiert (viel locker, wenig sehr hart)</option>
+          <option value="sweetspot">Sweet-Spot-lastig (wenig Zeit)</option>
+        </select></div>
+    </div>
+    <p class="muted" id="targetInfo"></p>
+    <p class="muted">Mit Datum wird rückwärts geplant (Grundlage → Aufbau → Spitze → Tapering). Ohne Datum gilt die Planlänge; „FTP steigern“ endet mit einer Testwoche. Der Plan startet immer an einem Montag.</p>
+  </div>
+  <div class="card">
+    <h2>Eigene Schwerpunkte (optional)</h2>
+    <p class="muted">Gewählte Einheiten ersetzen in Aufbau- und Spitzenphase die Vorgaben des Zieltyps, bei „Individuell“ im ganzen Plan.</p>
+    <div class="chips" id="focus"></div>
+  </div>
+  <div class="card">
+    <h2>Profil &amp; Zeit</h2>
+    <div class="grid">
+      <div><label for="ftp">FTP (Watt)</label><input type="number" inputmode="numeric" id="ftp"></div>
+      <div><label for="weight">Gewicht (kg)</label><input type="number" inputmode="decimal" id="weight" step="0.1"></div>
+      <div><label for="weekly_hours">Max. Stunden pro Woche</label><input type="number" inputmode="decimal" id="weekly_hours" step="0.5"></div>
+      <div><label for="wkg">W/kg</label><input id="wkg" disabled></div>
+    </div>
+    <h3>Trainingstage</h3>
+    <p class="muted">Tag aktivieren, maximale Dauer und Uhrzeit festlegen; „lang“ markiert den Tag für die lange Einheit.</p>
+    <div id="daysList"></div>
+  </div>
+  <button class="btn block" data-generate="zielMsg">Speichern &amp; Plan erstellen</button>
+  <div id="zielMsg"></div>
+</section>
+
+<!-- PLAN -->
+<section id="plan">
+  <div class="card">
+    <h2 id="planTitle">Noch kein Plan</h2>
+    <div class="muted" id="planSub"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" data-generate="planMsg">Plan neu berechnen</button>
+      <button class="btn sec" id="todayBtn">Zur aktuellen Woche</button>
+    </div>
+    <div id="planMsg"></div>
+  </div>
+  <div id="weeks"></div>
+</section>
+
+<!-- DATEN -->
+<section id="daten">
+  <div class="card">
+    <h2>intervals.icu <span class="muted">(empfohlen)</span></h2>
+    <p class="muted">Liest Fitness, Ermüdung und FTP aus intervals.icu (dort Garmin, Zwift bzw. Strava verbinden) und überträgt den Plan in deinen intervals.icu-Kalender. Von dort gehen die Einheiten automatisch an Zwift.</p>
+    <details><summary class="muted">So richtest du es ein</summary>
+      <ol class="steps">
+        <li>Kostenlos bei <a href="https://intervals.icu" target="_blank" rel="noopener">intervals.icu</a> anmelden.</li>
+        <li>Unter <i>Settings → Connections</i> Garmin und <b>Zwift</b> verbinden (bei Zwift das Hochladen geplanter Workouts aktivieren).</li>
+        <li>Unter <i>Settings → Developer Settings</i> einen API-Key erzeugen und hier eintragen.</li>
+      </ol></details>
+    <div class="grid" style="margin-top:8px">
+      <div><label for="icuKey">API-Key</label><input id="icuKey" type="password" autocomplete="off"></div>
+      <div><label for="icuAth">Athleten-ID (0 = du selbst)</label><input id="icuAth"></div>
+    </div>
+    <p class="muted" id="icuState"></p>
+    <div class="row"><button class="btn sec" id="icuSave">Speichern</button><button class="btn" id="icuLoad">Leistungsdaten laden</button></div>
+    <div id="icuMsg"></div>
+  </div>
+  <div class="card">
+    <h2>Strava</h2>
+    <p class="muted">Einmalig unter <a href="https://www.strava.com/settings/api" target="_blank" rel="noopener">strava.com/settings/api</a> eine API-Anwendung anlegen, als <b>Authorization Callback Domain</b> <code id="stravaRedirect"></code> eintragen und Client-ID und Secret hier speichern. Die Zugangsdaten bleiben nur auf diesem Gerät.</p>
+    <div class="grid">
+      <div><label for="stravaId">Client-ID</label><input id="stravaId" inputmode="numeric"></div>
+      <div><label for="stravaSecret">Client-Secret</label><input id="stravaSecret" type="password" autocomplete="off"></div>
+    </div>
+    <p class="muted" id="stravaState"></p>
+    <div class="row">
+      <button class="btn sec" id="stravaSave">Speichern</button>
+      <button class="btn sec" id="stravaConnect">Mit Strava verbinden</button>
+      <button class="btn sec" id="stravaCode">Code einfügen</button>
+      <button class="btn" id="stravaLoad">Aktivitäten laden</button>
+      <button class="btn sec sm" id="stravaReset">Trennen</button>
+    </div>
+    <div id="stravaMsg"></div>
+  </div>
+  <div class="card">
+    <h2>Ohne Verbindung</h2>
+    <div class="row"><label for="manHours" style="margin:0">Ø Stunden pro Woche der letzten 4 Wochen</label>
+      <input type="number" inputmode="decimal" id="manHours" step="0.5" style="width:100px"><button class="btn sec" id="manSave">Übernehmen</button></div>
+    <div id="manMsg"></div>
+  </div>
+  <div class="card" id="perfCard"></div>
+</section>
+
+<!-- EXPORT -->
+<section id="export">
+  <div class="card">
+    <h2>Zwift &amp; Kalender über intervals.icu</h2>
+    <p class="muted">Überträgt alle kommenden Einheiten in deinen intervals.icu-Kalender (geänderte werden aktualisiert, gestrichene entfernt). intervals.icu schickt jeweils die nächsten 7 Tage an Zwift; dort findest du sie unter <i>Trainings → Custom Workouts</i>. Achte darauf, dass die FTP in Zwift und intervals.icu übereinstimmt.</p>
+    <button class="btn block" id="pushIcu">Plan an intervals.icu &amp; Zwift senden</button>
+    <p class="muted">Tipp für den iPhone-Kalender: In intervals.icu unter <i>Settings</i> die iCal-Adresse des Kalenders kopieren und auf dem iPhone unter <i>Einstellungen → Kalender → Accounts → Account hinzufügen → Andere → Kalenderabo hinzufügen</i> einfügen. Dann aktualisieren sich die Termine automatisch.</p>
+    <div id="exportMsg"></div>
+  </div>
+  <div class="card">
+    <h2>Kalenderdatei</h2>
+    <p class="muted">Alternative ohne intervals.icu: alle Einheiten als <code>.ics</code> mit Uhrzeit, Erinnerung und Ablauf. Auf dem iPhone „Teilen → Kalender“ bzw. die Datei öffnen und „Alle hinzufügen“.</p>
+    <button class="btn sec" id="icsBtn">Kalenderdatei (.ics)</button>
+    <p class="muted">Einzelne Zwift-Dateien (<code>.zwo</code>) für den PC gibt es in jeder Einheit im Plan.</p>
+  </div>
+  <div class="card">
+    <h2>Sicherung</h2>
+    <p class="muted">Alle Daten liegen nur auf diesem Gerät. Mit einer Sicherung überträgst du sie auf ein anderes Gerät.</p>
+    <label class="chip" style="display:inline-flex;margin-bottom:10px"><input type="checkbox" id="backupSecrets"> API-Key und Strava-Zugang mitsichern</label>
+    <div class="row">
+      <button class="btn sec" id="backupBtn">Sicherung speichern</button>
+      <label class="btn sec" style="margin:0;display:inline-flex;align-items:center">Sicherung laden<input type="file" id="restoreFile" accept=".json,application/json" hidden></label>
+      <button class="btn danger sm" id="resetBtn">Alles löschen</button>
+    </div>
+    <div id="backupMsg"></div>
+  </div>
+</section>
+</main>
+
+<nav>
+  <button data-s="ziel"><i>🎯</i>Ziel</button>
+  <button data-s="plan"><i>📅</i>Plan</button>
+  <button data-s="daten"><i>📈</i>Leistung</button>
+  <button data-s="export"><i>🚴</i>Zwift &amp; Kalender</button>
+</nav>
+
+<dialog id="dlg"><div id="dlgBody"></div><p style="text-align:right;margin-bottom:0"><button class="btn sec" onclick="document.getElementById('dlg').close()">Schließen</button></p></dialog>
+
+<script src="planner.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

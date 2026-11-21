@@ -257,7 +257,15 @@ function renderData() {
 $("icuSave").onclick = () => { S.icu = { key: $("icuKey").value.trim(), athlete: $("icuAth").value.trim() || "0" }; save(); renderData(); msg("icuMsg", "Gespeichert."); };
 $("icuLoad").onclick = async e => {
   busy(e.target, true, "Lade …");
-  try { S.performance = await icuLoadPerformance(); S.lastSync = new Date().toISOString(); save(); renderData(); renderAnalysis(); msg("icuMsg", `${S.performance.activities} Aktivitäten der letzten ${DATA_DAYS} Tage geladen.`); }
+  try {
+    const perf = await icuLoadPerformance();
+    if (!perf.activities) {
+      msg("icuMsg", "Verbindung klappt, aber intervals.icu hat noch keine Aktivitäten. Nach dem ersten Verbinden lädt intervals.icu ältere Daten erst nach („Alte Daten herunterladen“ unter Einstellungen → Verbindungen). In ein paar Minuten erneut versuchen. Deine bisherigen Daten bleiben erhalten.", false);
+    } else {
+      S.performance = perf; S.lastSync = new Date().toISOString(); save(); renderData(); renderAnalysis();
+      msg("icuMsg", `${perf.activities} Aktivitäten der letzten ${DATA_DAYS} Tage geladen.`);
+    }
+  }
   catch (err) { msg("icuMsg", esc(err.message), false); }
   busy(e.target, false);
 };

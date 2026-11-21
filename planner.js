@@ -250,7 +250,7 @@ function generatePlan(st, perf) {
     if (hasEvent && ev >= ws && ev < addDays(ws, 7)) {
       const nm = st.goal_name || "Event";
       wd.push({ date: isoDate(ev), weekday: WEEKDAYS[weekdayMon0(ev)], time: "", workout: {
-        kind: "event", name: `🏁 ${nm}`, segments: [], minutes: 0, if: 0, tss: 0, structure: [],
+        kind: "event", name: `Event: ${nm}`, segments: [], minutes: 0, if: 0, tss: 0, structure: [],
         id: `W${String(w + 1).padStart(2, "0")}-event`, desc: "Dein Zielevent – viel Erfolg!" } });
     }
     if (["base", "build", "peak"].includes(phase)) level = Math.min(2, level + 1);
@@ -334,7 +334,7 @@ function planToIcs(plan) {
     const desc = `${wo.desc}\n\n${wo.structure.join("\n")}\n\nDauer: ${wo.minutes} min | TSS ~${wo.tss} | IF ${wo.if}` +
                  `\nPhase: ${w.phase_label} (Woche ${w.index})`;
     L.push("BEGIN:VEVENT", `UID:${day.date}-${wo.kind}@roadtoftp`, `DTSTAMP:${now}`, `DTSTART:${icsStamp(s)}`, `DTEND:${icsStamp(e)}`,
-      icsFold("SUMMARY:" + icsEsc(`🚴 ${wo.name} (${wo.minutes} min)`)), icsFold("DESCRIPTION:" + icsEsc(desc)),
+      icsFold("SUMMARY:" + icsEsc(`${wo.name} (${wo.minutes} min)`)), icsFold("DESCRIPTION:" + icsEsc(desc)),
       "CATEGORIES:Training", "BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:Training", "TRIGGER:-PT30M", "END:VALARM", "END:VEVENT");
   }
   L.push("END:VCALENDAR");

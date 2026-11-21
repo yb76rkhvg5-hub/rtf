@@ -13,11 +13,11 @@ const fmtDate = iso => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(2, 4)
 
 function tsbStatus(tsb) {
   if (tsb == null) return null;
-  if (tsb < -30) return { cls: "critical", icon: "⛔", label: "Überlastungsgefahr" };
-  if (tsb < -10) return { cls: "warning", icon: "⚠️", label: "Im Training belastet" };
-  if (tsb <= 5) return { cls: "good", icon: "✅", label: "Ausgeglichen" };
-  if (tsb <= 25) return { cls: "good", icon: "✅", label: "Frisch / bereit" };
-  return { cls: "serious", icon: "↘️", label: "Sehr erholt – Fitness sinkt" };
+  if (tsb < -30) return { cls: "critical", label: "Überlastungsgefahr" };
+  if (tsb < -10) return { cls: "warning", label: "Im Training belastet" };
+  if (tsb <= 5) return { cls: "good", label: "Ausgeglichen" };
+  if (tsb <= 25) return { cls: "good", label: "Frisch / bereit" };
+  return { cls: "serious", label: "Sehr erholt – Fitness sinkt" };
 }
 
 function card(title, sub) {
@@ -35,6 +35,15 @@ function renderAnalysis() {
   const root = $("analysis");
   if (!root) return;
   root.replaceChildren();
+  try { renderAnalysisInner(); }
+  catch (e) {
+    console.error(e);
+    const c = card("Analyse konnte nicht angezeigt werden");
+    note(c, `Fehler: <code>${esc(e.message)}</code>. Bitte RTF schließen und neu öffnen; falls es bleibt, unter „Leistung“ die Daten neu laden.`);
+  }
+}
+
+function renderAnalysisInner() {
   const P = S.performance, plan = S.plan, st = S.settings;
   const hasSeries = !!P?.series?.length;
   const today = todayIso();
@@ -61,7 +70,7 @@ function renderAnalysis() {
     const km = acts.reduce((x, a) => x + (a.km || 0), 0), hm = acts.reduce((x, a) => x + (a.elev || 0), 0);
     const tiles = [
       [r1(now.ctl), "Fitness (CTL)", `${now.ctl - ago.ctl >= 0 ? "+" : ""}${r1(now.ctl - ago.ctl)} in 4 Wochen`],
-      [tsb, "Form (TSB)", stt ? `${stt.icon} ${stt.label}` : ""],
+      [tsb, "Form (TSB)", stt ? stt.label : ""],
       [`${r1(h12)} h`, "Ø pro Woche", "letzte 12 Wochen"],
       [acts.length, "Aktivitäten", `${Math.round(km)} km · ${Math.round(hm).toLocaleString("de-DE")} hm`],
       [`${st.ftp} W`, "FTP (eingestellt)", st.weight ? `${(st.ftp / st.weight).toFixed(2)} W/kg` : ""],
@@ -208,7 +217,7 @@ function renderAnalysis() {
       li(`Stärkster Fitnessanstieg: <b>+${r1(maxRamp)} pro Woche</b>${rampWeek ? ` (Woche ab ${fmtDate(rampWeek)})` : ""} – bis etwa +5 bis +7 gilt als gut verträglich.`);
       if (evIso) {
         const e = proj.find(p => p.date === evIso);
-        if (e) { const tsb = r1(e.ctl - e.atl), stt = tsbStatus(tsb); li(`Form am Eventtag: <b>${tsb}</b> – ${stt.icon} ${stt.label}${tsb >= 5 && tsb <= 25 ? " (Zielbereich +5 bis +25)" : ""}.`); }
+        if (e) { const tsb = r1(e.ctl - e.atl), stt = tsbStatus(tsb); li(`Form am Eventtag: <b>${tsb}</b> – <span class="dot ${stt.cls}"></span>${stt.label}${tsb >= 5 && tsb <= 25 ? " (Zielbereich +5 bis +25)" : ""}.`); }
       }
     }
     const tot = plan.weeks.reduce((x, w) => x + w.hours, 0), hard = plan.weeks.flatMap(w => w.days).filter(d => !["endurance", "recovery", "event", "endurance_tempo"].includes(d.workout.kind)).length;
@@ -221,38 +230,38 @@ function renderAnalysis() {
   // ------------------------------------------------ Hinweise
   {
     const tips = [];
-    const add = (cls, icon, label, text) => tips.push({ cls, icon, label, text });
+    const add = (cls, label, text) => tips.push({ cls, label, text });
     if (hasSeries) {
       const now = P.series.at(-1), tsb = now.ctl - now.atl;
-      if (tsb < -30) add("critical", "⛔", "Ermüdung", "Deine Form liegt unter −30. Plane 2–3 lockere Tage ein, bevor es intensiv weitergeht.");
-      else if (tsb > 25) add("serious", "↘️", "Pause", "Du bist sehr erholt – die Fitness baut gerade ab. Ein guter Moment für einen FTP-Test oder den Planstart.");
+      if (tsb < -30) add("critical", "Ermüdung", "Deine Form liegt unter −30. Plane 2–3 lockere Tage ein, bevor es intensiv weitergeht.");
+      else if (tsb > 25) add("serious", "Pause", "Du bist sehr erholt – die Fitness baut gerade ab. Ein guter Moment für einen FTP-Test oder den Planstart.");
       const last8 = []; for (let i = 0; i < 8; i++) {
         const a = isoDate(addDays(new Date(), -7 * (i + 1))), b = isoDate(addDays(new Date(), -7 * i));
         last8.push(acts.filter(x => x.date > a && x.date <= b).length);
       }
       const regular = last8.filter(n => n >= 3).length;
-      add(regular >= 6 ? "good" : "warning", regular >= 6 ? "✅" : "⚠️", "Regelmäßigkeit",
+      add(regular >= 6 ? "good" : "warning", "Regelmäßigkeit",
         `In ${regular} von 8 Wochen hattest du mindestens 3 Einheiten.${regular < 6 ? " Gleichmäßigkeit bringt mehr als einzelne harte Wochen." : ""}`);
       const tests = acts.filter(a => /ftp|ramp/i.test(a.name || "")).map(a => a.date).sort();
       if (tests.length) {
         const days = Math.round((Date.now() - ts(tests.at(-1))) / DAY);
-        add(days > 56 ? "warning" : "good", days > 56 ? "⚠️" : "✅", "FTP-Test",
+        add(days > 56 ? "warning" : "good", "FTP-Test",
           `Letzter FTP-Test vor ${days} Tagen (${fmtDate(tests.at(-1))}).${days > 56 ? " Ein neuer Test hält die Wattvorgaben aktuell." : ""}`);
       }
       if (P.ftp_estimate && Math.abs(P.ftp_estimate - st.ftp) / st.ftp > 0.05)
-        add("warning", "⚠️", "FTP", `Deine Fahrten deuten auf ${P.ftp_estimate} W hin, eingestellt sind ${st.ftp} W. Prüfe die FTP unter „Leistung“.`);
+        add("warning", "FTP", `Deine Fahrten deuten auf ${P.ftp_estimate} W hin, eingestellt sind ${st.ftp} W. Prüfe die FTP unter „Leistung“.`);
       const kraft = acts.filter(a => a.type === "WeightTraining" && a.date > isoDate(addDays(new Date(), -28))).length;
-      if (kraft) add("good", "💪", "Kraft", `${r1(kraft / 4)}× Krafttraining pro Woche. Es fließt in Fitness und Ermüdung ein, aber nicht in den Radplan – lege es möglichst auf lockere Tage.`);
+      if (kraft) add("good", "Kraft", `${r1(kraft / 4)}× Krafttraining pro Woche. Es fließt in Fitness und Ermüdung ein, aber nicht in den Radplan – lege es möglichst auf lockere Tage.`);
     }
     if (plan && Number(plan.ftp) !== Number(st.ftp))
-      add("warning", "⚠️", "Plan veraltet", `Der Plan wurde mit FTP ${plan.ftp} W erstellt, eingestellt sind ${st.ftp} W. Bitte „Plan neu berechnen“.`);
+      add("warning", "Plan veraltet", `Der Plan wurde mit FTP ${plan.ftp} W erstellt, eingestellt sind ${st.ftp} W. Bitte „Plan neu berechnen“.`);
     if (plan && S.lastSync && (Date.now() - new Date(S.lastSync)) / DAY > 7)
-      add("warning", "⚠️", "Daten", "Deine Leistungsdaten sind älter als eine Woche – unter „Leistung“ neu laden.");
+      add("warning", "Daten", "Deine Leistungsdaten sind älter als eine Woche – unter „Leistung“ neu laden.");
     if (tips.length) {
       const c = card("Hinweise");
       for (const t of tips) {
         const d = document.createElement("div"); d.className = `tip st-${t.cls}`;
-        const b = document.createElement("b"); b.textContent = `${t.icon} ${t.label}`;
+        const b = document.createElement("b"); b.textContent = t.label;
         const s = document.createElement("span"); s.textContent = t.text;
         d.append(b, s); c.appendChild(d);
       }
@@ -275,8 +284,10 @@ function renderAnalysis() {
   }
 }
 
-// Neu zeichnen bei Größen- oder Farbwechsel, wenn die Seite sichtbar ist
+// Neu zeichnen bei Größen- oder Farbwechsel und beim Öffnen der Seite (unabhängig von app.js)
 let _rt;
-const _redraw = () => { clearTimeout(_rt); _rt = setTimeout(() => { if ($("analyse")?.classList.contains("active")) renderAnalysis(); }, 200); };
+const _redraw = () => { clearTimeout(_rt); _rt = setTimeout(() => { if (document.getElementById("analyse")?.classList.contains("active")) renderAnalysis(); }, 120); };
 window.addEventListener("resize", _redraw);
-matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", _redraw);
+window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener?.("change", _redraw);
+document.addEventListener("click", e => { if (e.target.closest?.('nav button[data-s="analyse"]')) _redraw(); });
+window.addEventListener("load", _redraw);

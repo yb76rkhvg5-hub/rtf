@@ -326,7 +326,7 @@ function profile(segs, h = 38) {
     else if (s.t === "free") flat.push([s.d, 1, 1]);
     else flat.push([s.d, s.p, s.p]);
   }
-  if (!flat.length) return `<div class="trophy" style="height:${h}px">🏆</div>`;
+  if (!flat.length) return `<div class="trophy" style="height:${h}px">Event</div>`;
   const tot = flat.reduce((a, b) => a + b[0], 0), mx = 1.6;
   let x = 0, out = "";
   for (const [d, a, b] of flat) {

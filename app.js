@@ -180,8 +180,17 @@ async function stravaToken(params) {
   const r = await fetch("https://www.strava.com/oauth/token", { method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ client_id: S.strava.client_id, client_secret: S.strava.client_secret, ...params }) });
-  const j = await r.json();
-  if (!r.ok) throw new Error("Strava: " + (j.message || r.status));
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const e = (j.errors || [])[0] || {};
+    const hints = {
+      Application: "Client-ID oder Client-Secret stimmt nicht. Secret auf strava.com/settings/api über „Anzeigen“ neu kopieren (nicht den Zugriffs- oder Aktualisierungs-Token), in RTF speichern und neu verbinden.",
+      AuthorizationCode: "Der Strava-Code ist abgelaufen oder wurde schon benutzt. Bitte erneut auf „Mit Strava verbinden“ tippen.",
+      RefreshToken: "Die Strava-Verbindung ist abgelaufen. Bitte erneut auf „Mit Strava verbinden“ tippen.",
+    };
+    const detail = e.resource ? ` (${e.resource} ${e.field || ""} ${e.code || ""})`.replace(/\s+\)/, ")") : "";
+    throw new Error(`Strava: ${j.message || r.status}${detail}. ${hints[e.resource] || ""}`);
+  }
   Object.assign(S.strava, { access_token: j.access_token, refresh_token: j.refresh_token, expires_at: j.expires_at });
   if (j.athlete) S.strava.athlete = `${j.athlete.firstname || ""} ${j.athlete.lastname || ""}`.trim();
   save();
@@ -257,7 +266,12 @@ $("icuLoad").onclick = async e => {
   catch (err) { msg("icuMsg", esc(err.message), false); }
   busy(e.target, false);
 };
-$("stravaSave").onclick = () => { Object.assign(S.strava, { client_id: $("stravaId").value.trim(), client_secret: $("stravaSecret").value.trim() }); save(); renderData(); msg("stravaMsg", "Gespeichert."); };
+$("stravaSave").onclick = () => {
+  const id = $("stravaId").value.replace(/\s/g, ""), secret = $("stravaSecret").value.replace(/\s/g, "");
+  if (!/^\d+$/.test(id)) return msg("stravaMsg", "Die Client-ID besteht nur aus Ziffern (z. B. 299517).", false);
+  if (!/^[0-9a-f]{40}$/i.test(secret)) return msg("stravaMsg", `Das Client-Secret sollte 40 Zeichen lang sein (0–9, a–f); eingegeben: ${secret.length} Zeichen. Bitte auf strava.com/settings/api bei „Geheimer Clientschlüssel“ über „Anzeigen“ kopieren.`, false);
+  Object.assign(S.strava, { client_id: id, client_secret: secret }); save(); renderData(); msg("stravaMsg", "Gespeichert. Jetzt „Mit Strava verbinden“ antippen.");
+};
 $("stravaConnect").onclick = () => { if (!S.strava.client_id) return msg("stravaMsg", "Erst Client-ID und Secret speichern.", false); stravaConnect(); };
 $("stravaCode").onclick = async () => {
   const c = prompt("Strava-Code einfügen:");

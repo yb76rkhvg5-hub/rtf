@@ -97,12 +97,17 @@ async function runAutomation(env) {
   S.planBase = generatePlan(cfg.settings, cfg.perf);
   const c = calCfg();
   const busy = await readBusy(c.horizon);
+  // Nichts geändert (Termine, Plan-Einstellungen, Datum)? Dann sofort fertig – spart Akku und Daten.
+  const sig = JSON.stringify({ busy, cfg: cfgNote.description, day: todayIso() });
+  const store = typeof Keychain !== "undefined" ? Keychain : env.store;
+  if (store && !env.force && store.contains("roadtoftp-last") && store.get("roadtoftp-last") === sig) return "Keine Änderungen – nichts zu tun.";
   S.cal = { data: { id: null, fetched: new Date().toISOString(), busy } };
   applyCalendar();
   await writeBusyNote(busy);
   const push = await icuPushPlan();
   const cal = await targetCalendar();
   const written = await writeCalendar(cal);
+  if (store) store.set("roadtoftp-last", sig);
   const log = S.cal.log || [];
   const summary = log.length
     ? `${log.length} Anpassung${log.length > 1 ? "en" : ""}: ` + log.map(l => `${l.date.slice(8, 10)}.${l.date.slice(5, 7)}. ${l.name} – ${l.text}`).join("; ")

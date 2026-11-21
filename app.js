@@ -10,7 +10,7 @@ const DATA_DAYS = 180; // Zeitraum für Leistungsdaten und Analyse
 const DEFAULTS = {
   settings: {
     goal_type: "ftp", goal_name: "", event_date: "", target_ftp: "", start_date: "", plan_weeks: 12,
-    style: "pyramidal", focus: [], ftp: 200, weight: 75, weekly_hours: 6, long_day: 5,
+    style: "pyramidal", focus: [], ftp: 200, weight: 75, weekly_hours: 6, ramp: "gradual", long_day: 5,
     days: {
       0: { active: false, minutes: 60, time: "18:00" }, 1: { active: true, minutes: 75, time: "18:00" },
       2: { active: true, minutes: 60, time: "18:00" }, 3: { active: true, minutes: 75, time: "18:00" },
@@ -92,7 +92,7 @@ applyTheme();
 function renderForm() {
   const st = S.settings;
   $("goal_type").innerHTML = Object.entries(GOALS).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join("");
-  for (const k of ["goal_type", "goal_name", "event_date", "target_ftp", "start_date", "plan_weeks", "style", "ftp", "weight", "weekly_hours"])
+  for (const k of ["goal_type", "goal_name", "event_date", "target_ftp", "start_date", "plan_weeks", "style", "ftp", "weight", "weekly_hours", "ramp"])
     $(k).value = st[k] ?? "";
   if (!st.start_date) $("start_date").value = todayIso();
   $("focus").innerHTML = Object.entries(HARD_TYPES).map(([k, v]) =>
@@ -123,7 +123,7 @@ function collect() {
     goal_type: $("goal_type").value, goal_name: $("goal_name").value.trim(), event_date: $("event_date").value,
     target_ftp: $("target_ftp").value, start_date: $("start_date").value, plan_weeks: +$("plan_weeks").value || 12,
     style: $("style").value, focus: [...document.querySelectorAll("#focus input:checked")].map(x => x.value),
-    ftp: +$("ftp").value || 200, weight: +$("weight").value || 75, weekly_hours: +$("weekly_hours").value || 6, days,
+    ftp: +$("ftp").value || 200, weight: +$("weight").value || 75, weekly_hours: +$("weekly_hours").value || 6, ramp: $("ramp").value, days,
     long_day: +(document.querySelector("input[name=long]:checked")?.value ?? 5),
   };
 }

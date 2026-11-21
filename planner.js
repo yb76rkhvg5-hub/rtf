@@ -200,6 +200,7 @@ function generatePlan(st, perf) {
   const recent = perf?.weekly_hours_avg;
   let cur = recent ? Math.min(maxHours, recent * 1.05) : maxHours * 0.8;
   cur = Math.max(cur, Math.min(maxHours, 2));
+  if (st.ramp === "full") cur = maxHours; // Einstellung: sofort volle Wochenzeit statt behutsam steigern
   const tsb = perf?.tsb;
 
   const phases = phasesFor(weeks, st.goal_type in GOALS ? st.goal_type : "ftp", hasEvent);

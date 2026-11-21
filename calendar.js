@@ -6,7 +6,21 @@
 
 const CAL_NOTE_DATE = "2000-01-01";
 const CAL_NOTE_NAME = "RTF Kalender";
-const CAL_DEFAULTS = { earliest: "05:30", latest: "21:30", buffer: 15, horizon: 14, autopush: true };
+const CAL_DEFAULTS = { earliest: "05:30", latest: "21:30", buffer: 15, horizon: 14, autopush: true,
+  work: { active: true, from: "06:40", to: "19:00", days: [0, 1, 2, 3, 4] } }; // feste Arbeitszeit (Mo–Fr)
+
+/** Feste Arbeitszeit als belegte Blöcke für jeden Tag im Zeitraum */
+function workBlocks(c, fromIso, toIso) {
+  const w = c.work;
+  if (!w?.active || !w.days?.length) return [];
+  const out = [];
+  for (let d = parseDate(fromIso); isoDate(d) <= toIso; d = addDays(d, 1)) {
+    if (!w.days.includes(weekdayMon0(d))) continue;
+    const at = hm => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, toMin(hm)).getTime();
+    out.push({ s: at(w.from), e: at(w.to), work: true });
+  }
+  return out;
+}
 const calCfg = () => ({ ...CAL_DEFAULTS, ...(S.settings.cal || {}) });
 
 // ---------------------------------------------------------------- Einlesen
@@ -85,11 +99,18 @@ function rebuild(d, minutes, ftp) {
 function adaptPlan(base, cal, st) {
   const plan = structuredClone(base);
   const log = [];
-  if (!plan || !cal?.busy) return { plan, log };
-  const c = { ...CAL_DEFAULTS, ...(st.cal || {}) };
-  const today = todayIso(), horizon = isoDate(addDays(new Date(), c.horizon));
+  if (!plan) return { plan, log };
+  const c = { ...CAL_DEFAULTS, ...(st.cal || {}), work: { ...CAL_DEFAULTS.work, ...(st.cal?.work || {}) } };
+  const today = todayIso();
+  const planEnd = plan.weeks.at(-1) ? isoDate(addDays(parseDate(plan.weeks.at(-1).start), 6)) : today;
+  // Kalendertermine kennen wir für ~14 Tage, die Arbeitszeit für den ganzen Plan
+  const horizon = c.work.active ? planEnd : isoDate(addDays(new Date(), c.horizon));
+  const busyAll = [...(cal?.busy || []), ...workBlocks(c, today, horizon)];
+  if (!busyAll.length) return { plan, log };
+  cal = { ...(cal || {}), busy: busyAll };
   const easy = k => ["endurance", "recovery"].includes(k);
-  for (const w of plan.weeks) {
+  const why = d => cal.busy.some(b => !b.work && b.s < parseDate(d.date).getTime() + 864e5 && b.e > parseDate(d.date).getTime()) ? "Termin" : "Arbeitszeit";
+  for (const [wi, w] of plan.weeks.entries()) {
     const order = [...w.days].filter(d => d.date >= today && d.date <= horizon && d.workout.kind !== "event")
       .sort((a, b) => Number(easy(a.workout.kind)) - Number(easy(b.workout.kind)));
     const taken = new Set(w.days.map(d => d.date));
@@ -99,7 +120,10 @@ function adaptPlan(base, cal, st) {
       const slot = bestSlot(gaps, need, pref);
       if (slot) {
         const t = fromMin(slot.st);
-        if (t !== d.time) { log.push({ date: d.date, name: d.workout.name, text: `Uhrzeit ${d.time} → ${t}` }); d.note = `Wegen Termin auf ${t} Uhr gelegt`; d.time = t; }
+        if (t !== d.time) {
+          if (why(d) === "Termin") { log.push({ date: d.date, name: d.workout.name, text: `Uhrzeit ${d.time} → ${t}` }); d.note = `Wegen Termin auf ${t} Uhr gelegt`; }
+          d.time = t; // Verschiebung nur wegen Arbeitszeit ist der Normalfall – kein Hinweis nötig
+        }
         continue;
       }
       const longest = gaps.reduce((a, g) => (!a || g[1] - g[0] > a[1] - a[0] ? g : a), null);
@@ -108,7 +132,7 @@ function adaptPlan(base, cal, st) {
         rebuild(d, len, plan.ftp);
         const t = fromMin(longest[0]);
         log.push({ date: d.date, name: d.workout.name, text: `gekürzt auf ${d.workout.minutes} min, ${t} Uhr` });
-        d.note = `Wegen Terminen gekürzt (${need} → ${d.workout.minutes} min)`; d.time = t;
+        d.note = `Wegen ${why(d) === "Termin" ? "Terminen" : "Arbeitszeit"} gekürzt (${need} → ${d.workout.minutes} min)`; d.time = t;
         continue;
       }
       // freien Tag derselben Woche suchen (nicht direkt neben einer harten Einheit, wenn möglich)
@@ -134,6 +158,34 @@ function adaptPlan(base, cal, st) {
       d.drop = true;
     }
     w.days = w.days.filter(d => !d.drop).sort((a, b) => a.date.localeCompare(b.date));
+
+    // Ausgleich: was durch Kürzen/Entfallen fehlt, auf andere Einheiten derselben Woche verteilen,
+    // damit die geplante Wochenzeit erreicht wird – innerhalb freier Fenster und der Maximaldauer je Tag.
+    const fut = d => d.date >= today && d.date <= horizon;
+    const sum = days => days.filter(fut).reduce((a, d) => a + d.workout.minutes, 0);
+    let deficit = sum(base.weeks[wi].days) - sum(w.days);
+    if (deficit >= 10) {
+      const grow = ["endurance", "endurance_tempo", "tempo", "sweetspot", "sweetspot_long", "threshold", "overunder"];
+      const cands = w.days.filter(d => fut(d) && grow.includes(d.workout.kind))
+        .sort((a, b) => Number(!easy(a.workout.kind)) - Number(!easy(b.workout.kind)) || b.workout.minutes - a.workout.minutes);
+      for (const d of cands) {
+        if (deficit < 10) break;
+        const day = st.days?.[weekdayMon0(parseDate(d.date))];
+        const cap = Math.max(d.workout.minutes, Math.round((day?.active ? +day.minutes : d.workout.minutes) * 1.15 / 5) * 5);
+        const before = d.workout.minutes;
+        let want = Math.min(cap, before + deficit);
+        if (want - before < 10) continue;
+        const gaps = freeGaps(d.date, cal.busy, c);
+        let slot = bestSlot(gaps, want, toMin(d.time));
+        while (!slot && want - before >= 10) { want -= 5; slot = bestSlot(gaps, want, toMin(d.time)); }
+        if (!slot || want - before < 10) continue;
+        rebuild(d, want, plan.ftp);
+        d.time = fromMin(slot.st);
+        deficit -= d.workout.minutes - before;
+        log.push({ date: d.date, name: d.workout.name, text: `verlängert ${before} → ${d.workout.minutes} min (Wochenzeit halten)` });
+        d.note = (d.note ? d.note + " · " : "") + `Verlängert auf ${d.workout.minutes} min, um die Wochenzeit zu halten`;
+      }
+    }
     w.hours = Math.round(w.days.reduce((a, x) => a + x.workout.minutes, 0) / 6) / 10;
     w.tss = w.days.reduce((a, x) => a + x.workout.tss, 0);
   }
@@ -256,6 +308,9 @@ function renderCalendar() {
   if (!host) return;
   const c = calCfg(), cal = S.cal || {}, data = cal.data;
   $("calEarliest").value = c.earliest; $("calLatest").value = c.latest; $("calBuffer").value = c.buffer; $("calAuto").checked = !!c.autopush;
+  const wk = { ...CAL_DEFAULTS.work, ...(c.work || {}) };
+  $("workActive").checked = !!wk.active; $("workFrom").value = wk.from; $("workTo").value = wk.to;
+  $("workDays").innerHTML = WEEKDAYS.map((n, i) => `<label class="chip"><input type="checkbox" value="${i}" ${wk.days.includes(i) ? "checked" : ""}> ${n}</label>`).join("");
   const fmtTs = s => s ? new Date(s).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–";
   const now = Date.now(), next = data ? data.busy.filter(b => b.e > now && b.s < now + 14 * 864e5).length : 0;
   let st = !S.icu?.key ? "Zuerst intervals.icu unter „Leistung“ verbinden."
@@ -273,10 +328,14 @@ function renderCalendar() {
 function calBindUi() {
   const saveCfg = () => {
     S.settings.cal = { earliest: $("calEarliest").value || CAL_DEFAULTS.earliest, latest: $("calLatest").value || CAL_DEFAULTS.latest,
-      buffer: Math.max(0, +$("calBuffer").value || 0), horizon: 14, autopush: $("calAuto").checked };
+      buffer: Math.max(0, +$("calBuffer").value || 0), horizon: 14, autopush: $("calAuto").checked,
+      work: { active: $("workActive").checked, from: $("workFrom").value || CAL_DEFAULTS.work.from, to: $("workTo").value || CAL_DEFAULTS.work.to,
+              days: [...document.querySelectorAll("#workDays input:checked")].map(x => +x.value) } };
     applyCalendar(); save(); renderAll();
+    autoCalendarSync(); // geänderte Einstellungen an die Automatik weitergeben und Plan senden
   };
-  ["calEarliest", "calLatest", "calBuffer", "calAuto"].forEach(id => $(id).addEventListener("change", saveCfg));
+  ["calEarliest", "calLatest", "calBuffer", "calAuto", "workActive", "workFrom", "workTo"].forEach(id => $(id).addEventListener("change", saveCfg));
+  $("workDays").addEventListener("change", saveCfg);
   $("calSync").onclick = async e => {
     busy(e.target, true, "Prüfe …");
     try { await autoCalendarSync({ silent: false }); msg("calMsg", "Kalender geprüft und Plan angepasst."); }

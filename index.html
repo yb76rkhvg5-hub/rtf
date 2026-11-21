@@ -268,7 +268,8 @@
     <div class="grid">
       <div><label for="ftp">FTP (Watt)</label><input type="number" inputmode="numeric" id="ftp"></div>
       <div><label for="weight">Gewicht (kg)</label><input type="number" inputmode="decimal" id="weight" step="0.1"></div>
-      <div><label for="weekly_hours">Max. Stunden pro Woche</label><input type="number" inputmode="decimal" id="weekly_hours" step="0.5"></div>
+      <div><label for="weekly_hours">Stunden pro Woche</label><input type="number" inputmode="decimal" id="weekly_hours" step="0.5"></div>
+      <div><label for="ramp">Umfang</label><select id="ramp"><option value="gradual">Behutsam auf die Wochenzeit steigern</option><option value="full">Sofort volle Wochenzeit</option></select></div>
       <div><label for="wkg">W/kg</label><input id="wkg" disabled></div>
     </div>
     <h3>Trainingstage</h3>
@@ -307,6 +308,13 @@
       <div><label for="calLatest">Spätestes Ende</label><input type="time" id="calLatest"></div>
       <div><label for="calBuffer">Puffer um Termine (min)</label><input type="number" inputmode="numeric" id="calBuffer" min="0" step="5"></div>
     </div>
+    <h3>Feste Arbeitszeit</h3>
+    <label class="chip" style="display:inline-flex;margin-bottom:10px"><input type="checkbox" id="workActive"> Arbeitszeit als belegt behandeln</label>
+    <div class="grid">
+      <div><label for="workFrom">Von</label><input type="time" id="workFrom"></div>
+      <div><label for="workTo">Bis</label><input type="time" id="workTo"></div>
+    </div>
+    <div class="chips" id="workDays" style="margin-top:10px"></div>
     <label class="chip" style="display:inline-flex;margin-top:12px"><input type="checkbox" id="calAuto"> Änderungen automatisch an intervals.icu senden</label>
     <div class="row" style="margin-top:12px">
       <button class="btn" id="calSync">Jetzt prüfen</button>
@@ -324,7 +332,7 @@
       <li>Optional: In der Kalender-App einen Kalender <b>RoadToFTP</b> anlegen – dann landen die Einheiten dort und lassen sich ein- und ausblenden. Sonst nutzt RoadToFTP deinen Standardkalender.</li>
       <li>Unten <b>„Skript kopieren“</b> → Scriptable öffnen → <b>+</b> → einfügen → oben den Namen <b>RoadToFTP</b> vergeben → <b>▶︎</b> ausführen.</li>
       <li>Beim ersten Lauf deinen intervals.icu API-Schlüssel einfügen (wird sicher im Schlüsselbund gespeichert) und Zugriff auf Kalender und Mitteilungen erlauben.</li>
-      <li>Kurzbefehle → <b>Automation</b> → <b>+</b> → <b>Tageszeit</b> 05:00, täglich → <b>Sofort ausführen</b> → Aktion <b>Skript ausführen</b> (Scriptable) → <b>RoadToFTP</b>. Optional eine zweite Automation um 12:00.</li>
+      <li>Kurzbefehle → <b>Automation</b> → <b>+</b> → <b>Tageszeit</b> 05:00, täglich → <b>Sofort ausführen</b> → Aktion <b>Skript ausführen</b> (Scriptable) → <b>RoadToFTP</b>. Zusätzlich: Automation <b>App → Kalender → Wird geschlossen</b> → Sofort ausführen → dasselbe Skript. So wird nach jeder Änderung im Kalender neu geplant. Für Einladungen von außen weitere Uhrzeiten (z. B. 12:00, 17:00) anlegen – ohne Änderungen beendet sich das Skript sofort.</li>
     </ol>
     <textarea id="calScript" readonly rows="8" style="width:100%;font:12px/1.4 ui-monospace,Menlo,monospace;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--soft);color:var(--ink)">Skript wird geladen …</textarea>
     <div class="row" style="margin-top:8px"><button class="btn" id="calScriptCopy">Skript kopieren</button></div>
@@ -416,10 +424,10 @@
 
 <dialog id="dlg"><div id="dlgBody"></div><p style="text-align:right;margin-bottom:0"><button class="btn sec" onclick="document.getElementById('dlg').close()">Schließen</button></p></dialog>
 
-<script src="planner.js?v=11"></script>
-<script src="charts.js?v=11"></script>
-<script src="analysis.js?v=11"></script>
-<script src="calendar.js?v=11"></script>
-<script src="app.js?v=11"></script>
+<script src="planner.js?v=12"></script>
+<script src="charts.js?v=12"></script>
+<script src="analysis.js?v=12"></script>
+<script src="calendar.js?v=12"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>

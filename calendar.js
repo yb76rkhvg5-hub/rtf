@@ -7,7 +7,7 @@
 const CAL_NOTE_DATE = "2000-01-01";
 const CAL_NOTE_NAME = "RTF Kalender";
 const CAL_DEFAULTS = { earliest: "05:30", latest: "21:30", buffer: 15, horizon: 14, autopush: true,
-  work: { active: true, from: "06:40", to: "19:00", days: [0, 1, 2, 3, 4] } }; // feste Arbeitszeit (Mo–Fr)
+  work: { active: true, from: "06:40", to: "19:00", doneBy: "06:10", days: [0, 1, 2, 3, 4] } }; // feste Arbeitszeit (Mo–Fr), morgens fertig bis
 
 /** Feste Arbeitszeit als belegte Blöcke für jeden Tag im Zeitraum */
 function workBlocks(c, fromIso, toIso) {
@@ -18,6 +18,8 @@ function workBlocks(c, fromIso, toIso) {
     if (!w.days.includes(weekdayMon0(d))) continue;
     const at = hm => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, toMin(hm)).getTime();
     out.push({ s: at(w.from), e: at(w.to), work: true });
+    // Morgens vor der Arbeit: Training muss bis "doneBy" beendet sein (feste Grenze, ohne Puffer)
+    if (w.doneBy && toMin(w.doneBy) < toMin(w.from)) out.push({ s: at(w.doneBy), e: at(w.from), work: true, nb: true });
   }
   return out;
 }
@@ -64,7 +66,8 @@ function freeGaps(dateIso, busy, c) {
   const we = toMin(c.latest);
   if (dateIso === todayIso()) { const n = new Date(); ws = Math.max(ws, round5(n.getHours() * 60 + n.getMinutes() + 15)); }
   const blocks = busy.filter(b => b.e > at(ws) && b.s < at(we))
-    .map(b => [Math.max(ws, Math.floor((b.s - at(0)) / 60000) - c.buffer), Math.min(we, Math.ceil((b.e - at(0)) / 60000) + c.buffer)])
+    .map(b => { const buf = b.nb ? 0 : c.buffer; // feste Grenzen (z. B. "morgens fertig bis") ohne Puffer
+      return [Math.max(ws, Math.floor((b.s - at(0)) / 60000) - buf), Math.min(we, Math.ceil((b.e - at(0)) / 60000) + buf)]; })
     .sort((a, b) => a[0] - b[0]);
   const gaps = [];
   let cur = ws;
@@ -128,8 +131,11 @@ function adaptPlan(base, cal, st) {
       }
       const longest = gaps.reduce((a, g) => (!a || g[1] - g[0] > a[1] - a[0] ? g : a), null);
       const len = longest ? Math.floor((longest[1] - longest[0]) / 5) * 5 : 0;
-      if (len >= 30 && d.workout.kind !== "ftp_test") {
-        rebuild(d, len, plan.ftp);
+      // Kürzen nur, wenn die gekürzte Einheit wirklich ins Fenster passt (Intervall-Einheiten haben eine Mindestlänge)
+      const orig = d.workout;
+      if (len >= 30 && d.workout.kind !== "ftp_test") rebuild(d, len, plan.ftp);
+      if (d.workout !== orig && d.workout.minutes > len) d.workout = orig;
+      if (d.workout !== orig) {
         const t = fromMin(longest[0]);
         log.push({ date: d.date, name: d.workout.name, text: `gekürzt auf ${d.workout.minutes} min, ${t} Uhr` });
         d.note = `Wegen ${why(d) === "Termin" ? "Terminen" : "Arbeitszeit"} gekürzt (${need} → ${d.workout.minutes} min)`; d.time = t;
@@ -179,8 +185,11 @@ function adaptPlan(base, cal, st) {
         let slot = bestSlot(gaps, want, toMin(d.time));
         while (!slot && want - before >= 10) { want -= 5; slot = bestSlot(gaps, want, toMin(d.time)); }
         if (!slot || want - before < 10) continue;
+        const prev = d.workout;
         rebuild(d, want, plan.ftp);
-        d.time = fromMin(slot.st);
+        const fit = bestSlot(gaps, d.workout.minutes, toMin(d.time));
+        if (!fit) { d.workout = prev; continue; } // Ergebnis länger als gedacht -> nicht verlängern
+        d.time = fromMin(fit.st);
         deficit -= d.workout.minutes - before;
         log.push({ date: d.date, name: d.workout.name, text: `verlängert ${before} → ${d.workout.minutes} min (Wochenzeit halten)` });
         d.note = (d.note ? d.note + " · " : "") + `Verlängert auf ${d.workout.minutes} min, um die Wochenzeit zu halten`;
@@ -309,7 +318,7 @@ function renderCalendar() {
   const c = calCfg(), cal = S.cal || {}, data = cal.data;
   $("calEarliest").value = c.earliest; $("calLatest").value = c.latest; $("calBuffer").value = c.buffer; $("calAuto").checked = !!c.autopush;
   const wk = { ...CAL_DEFAULTS.work, ...(c.work || {}) };
-  $("workActive").checked = !!wk.active; $("workFrom").value = wk.from; $("workTo").value = wk.to;
+  $("workActive").checked = !!wk.active; $("workFrom").value = wk.from; $("workTo").value = wk.to; $("workDoneBy").value = wk.doneBy || "";
   $("workDays").innerHTML = WEEKDAYS.map((n, i) => `<label class="chip"><input type="checkbox" value="${i}" ${wk.days.includes(i) ? "checked" : ""}> ${n}</label>`).join("");
   const fmtTs = s => s ? new Date(s).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–";
   const now = Date.now(), next = data ? data.busy.filter(b => b.e > now && b.s < now + 14 * 864e5).length : 0;
@@ -329,12 +338,12 @@ function calBindUi() {
   const saveCfg = () => {
     S.settings.cal = { earliest: $("calEarliest").value || CAL_DEFAULTS.earliest, latest: $("calLatest").value || CAL_DEFAULTS.latest,
       buffer: Math.max(0, +$("calBuffer").value || 0), horizon: 14, autopush: $("calAuto").checked,
-      work: { active: $("workActive").checked, from: $("workFrom").value || CAL_DEFAULTS.work.from, to: $("workTo").value || CAL_DEFAULTS.work.to,
+      work: { active: $("workActive").checked, from: $("workFrom").value || CAL_DEFAULTS.work.from, to: $("workTo").value || CAL_DEFAULTS.work.to, doneBy: $("workDoneBy").value || "",
               days: [...document.querySelectorAll("#workDays input:checked")].map(x => +x.value) } };
     applyCalendar(); save(); renderAll();
     autoCalendarSync(); // geänderte Einstellungen an die Automatik weitergeben und Plan senden
   };
-  ["calEarliest", "calLatest", "calBuffer", "calAuto", "workActive", "workFrom", "workTo"].forEach(id => $(id).addEventListener("change", saveCfg));
+  ["calEarliest", "calLatest", "calBuffer", "calAuto", "workActive", "workFrom", "workTo", "workDoneBy"].forEach(id => $(id).addEventListener("change", saveCfg));
   $("workDays").addEventListener("change", saveCfg);
   $("calSync").onclick = async e => {
     busy(e.target, true, "Prüfe …");

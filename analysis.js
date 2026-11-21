@@ -140,7 +140,39 @@ function renderAnalysis() {
   }
 }
 
+// ------------------------------------------------ Unterreiter: Ausdauer | Kraft | Fazit
+const ANA_VIEWS = [["endurance", "Ausdauer"], ["strength", "Kraft"], ["verdict", "Fazit"]];
 function renderAnalysisInner() {
+  const view = S.ui?.anaView || "endurance";
+  const seg = document.createElement("div");
+  seg.className = "seg seg-wide ana-seg";
+  for (const [k, label] of ANA_VIEWS) {
+    const b = document.createElement("button");
+    b.textContent = label; b.className = k === view ? "active" : "";
+    b.onclick = () => { S.ui.anaView = k; save(); renderAnalysis(); window.scrollTo(0, 0); };
+    seg.appendChild(b);
+  }
+  $("analysis").appendChild(seg);
+  if (view === "strength") return renderStrength();
+  if (view === "verdict") return renderVerdict();
+  return renderEndurance();
+}
+
+/** Kennzahl-Kacheln: tiles = [[Wert, Bezeichnung, Zusatz], …] */
+function kpiGrid(parent, tiles) {
+  const g = document.createElement("div"); g.className = "kpis";
+  for (const [v, l, sub] of tiles) {
+    const k = document.createElement("div"); k.className = "kpi";
+    const b = document.createElement("b"); b.textContent = v;
+    const sp = document.createElement("span"); sp.textContent = l;
+    k.append(b, sp);
+    if (sub) { const sm = document.createElement("small"); sm.textContent = sub; k.appendChild(sm); }
+    g.appendChild(k);
+  }
+  parent.appendChild(g);
+}
+
+function renderEndurance() {
   const P = S.performance, plan = S.plan, st = S.settings;
   const hasSeries = !!P?.series?.length;
   const today = todayIso();
@@ -390,6 +422,219 @@ function renderAnalysisInner() {
     wrap.innerHTML = `<table><tr><th>Woche ab</th><th>TSS</th><th>CTL</th><th>ATL</th><th>TSB</th></tr>${rows.reverse().join("")}</table>`;
     det.appendChild(wrap); c.appendChild(det);
   }
+}
+
+// ================================================================ Kraft
+const STRENGTH_TYPES = new Set(["WeightTraining", "Workout", "Crossfit"]);
+const ENDURANCE_TYPES = new Set(["Ride", "VirtualRide", "GravelRide", "MountainBikeRide", "EBikeRide", "Run", "VirtualRun", "TrailRun", "Hike", "Swim", "Rowing", "NordicSki"]);
+const weekStart = d => addDays(d, -weekdayMon0(d));
+const daysAgo = n => isoDate(addDays(new Date(), -n));
+function addTips(parent, tips) {
+  for (const t of tips) {
+    const d = document.createElement("div"); d.className = `tip st-${t.cls}`;
+    const b = document.createElement("b"); b.textContent = t.label;
+    const s = document.createElement("span"); s.textContent = t.text;
+    d.append(b, s); parent.appendChild(d);
+  }
+}
+
+function strengthStats() {
+  const acts = S.performance?.activities_list || [];
+  const K = acts.filter(a => STRENGTH_TYPES.has(a.type)).sort((a, b) => a.date.localeCompare(b.date));
+  const last = n => K.filter(a => a.date > daysAgo(n));
+  const perWeek8 = last(56).length / 8, perWeek4 = last(28).length / 4;
+  // Serie: aufeinanderfolgende Wochen (rückwärts ab letzter voller Woche) mit mind. 2 Einheiten
+  let streak = 0;
+  for (let i = 1; i < 26; i++) {
+    const ws = isoDate(addDays(weekStart(new Date()), -7 * i)), we = isoDate(addDays(parseDate(ws), 7));
+    if (K.filter(a => a.date >= ws && a.date < we).length >= 2) streak++; else break;
+  }
+  return { acts, K, perWeek8, perWeek4, streak, recent: last(84) };
+}
+
+function renderStrength() {
+  const P = S.performance;
+  const C = { s1: cssVar("--s1"), q1: cssVar("--q1") };
+  if (!P?.activities_list) { note(card("Krafttraining"), "Lade unter <b>Leistung</b> deine Aktivitäten (Strava oder intervals.icu), dann erscheint hier die Auswertung deines Krafttrainings."); return; }
+  const { acts, K, perWeek4, perWeek8, streak, recent } = strengthStats();
+  if (!K.length) { note(card("Krafttraining"), "In den letzten 180 Tagen ist kein Krafttraining erfasst. Zeichne es mit Garmin oder Strava als „Krafttraining“ auf – dann wertet RoadToFTP es hier aus."); return; }
+
+  // Überblick
+  const lastK = K.at(-1), lastDays = Math.round((Date.now() - ts(lastK.date)) / 864e5);
+  const avgMin = avg(recent.map(a => a.minutes)) || avg(K.map(a => a.minutes));
+  const c1 = card("Krafttraining", "Ausgewertet werden Aktivitäten vom Typ Krafttraining der letzten 180 Tage.");
+  kpiGrid(c1, [
+    [`${r1(perWeek4)}×`, "pro Woche · 4 Wochen", perWeek4 >= 2 ? "Ziel 2× erreicht" : "Ziel: 2× pro Woche"],
+    [`${Math.round(avgMin)} min`, "Ø Dauer", `${recent.length} Einheiten in 12 Wochen`],
+    [`${r1(recent.reduce((x, a) => x + a.minutes, 0) / 60)} h`, "Gesamt · 12 Wochen", ""],
+    [lastDays === 0 ? "heute" : lastDays === 1 ? "gestern" : `vor ${lastDays} T.`, "Letzte Einheit", fmtDate(lastK.date)],
+    [`${streak} Wo.`, "Serie mit ≥ 2×", streak ? "ohne Unterbrechung" : "noch keine Serie"],
+  ]);
+
+  // Einheiten pro Woche (16 Wochen)
+  const bars = [];
+  for (let i = 15; i >= 0; i--) {
+    const ws = isoDate(addDays(weekStart(new Date()), -7 * i)), we = isoDate(addDays(parseDate(ws), 7));
+    const wk = K.filter(a => a.date >= ws && a.date < we);
+    bars.push({ label: fmtDate(ws).slice(0, 5), value: wk.length, color: C.s1, series: "Einheiten",
+      tip: `Woche ab ${fmtDate(ws)} · ${wk.reduce((x, a) => x + a.minutes, 0)} min` });
+  }
+  const h1 = document.createElement("h3"); h1.textContent = "Einheiten pro Woche"; c1.appendChild(h1);
+  barChart(chartHost(c1), { title: "Krafteinheiten pro Woche", bars, height: 140, yFmt: v => `${v}×` });
+
+  // Wochentage & Tageszeit
+  const c2 = card("Wann du Kraft trainierst");
+  const byDay = WEEKDAYS.map((n, i) => ({ label: n, value: K.filter(a => weekdayMon0(parseDate(a.date)) === i).length }));
+  const h2 = document.createElement("h3"); h2.textContent = "Wochentage"; h2.style.marginTop = "0"; c2.appendChild(h2);
+  const hb1 = document.createElement("div"); c2.appendChild(hb1);
+  hBars(hb1, byDay.map(d => ({ ...d, text: `${d.value}×` })), C.s1);
+  const timed = K.filter(a => a.time);
+  if (timed.length) {
+    const slot = t => { const h = +t.slice(0, 2); return h < 9 ? 0 : h < 14 ? 1 : h < 18 ? 2 : 3; };
+    const names = ["Früh (vor 9 Uhr)", "Mittags (9–14)", "Nachmittags (14–18)", "Abends (ab 18)"];
+    const h3 = document.createElement("h3"); h3.textContent = "Tageszeit"; c2.appendChild(h3);
+    const hb2 = document.createElement("div"); c2.appendChild(hb2);
+    hBars(hb2, names.map((n, i) => { const v = timed.filter(a => slot(a.time) === i).length; return { label: n, value: v, text: `${v}×` }; }), C.s1);
+  } else note(c2, "Für die Auswertung nach Tageszeit unter <b>Leistung</b> die Aktivitäten einmal neu laden.");
+
+  // Zusammenspiel mit dem Rad
+  const ftp = Number(S.settings.ftp) || 200;
+  const hardRide = a => ENDURANCE_TYPES.has(a.type) && ((a.np && a.np / ftp >= 0.85) || a.tss >= 70);
+  const hardDays = new Set(acts.filter(hardRide).map(a => a.date));
+  const sameDay = K.filter(a => hardDays.has(a.date)).length;
+  const dayBefore = K.filter(a => hardDays.has(isoDate(addDays(parseDate(a.date), 1)))).length;
+  const c3 = card("Zusammenspiel mit dem Rad");
+  const ul = document.createElement("ul"); ul.className = "facts";
+  const li = h => { const l = document.createElement("li"); l.innerHTML = h; ul.appendChild(l); };
+  li(`<b>${sameDay}</b> von ${K.length} Krafteinheiten am selben Tag wie eine harte Radeinheit.`);
+  li(`<b>${dayBefore}</b> am Tag vor einer harten Radeinheit – das kann die Beine für die Intervalle ermüden.`);
+  // passende Krafttage in der kommenden Woche aus dem Plan
+  const plan = S.plan, today = todayIso();
+  if (plan) {
+    const next7 = plan.weeks.flatMap(w => w.days).filter(d => d.date >= today && d.date < isoDate(addDays(new Date(), 7)));
+    const hard = new Set(next7.filter(d => !["endurance", "recovery", "event"].includes(d.workout.kind)).map(d => d.date));
+    const good = [];
+    for (let i = 0; i < 7; i++) {
+      const di = isoDate(addDays(new Date(), i));
+      if (hard.has(di) || hard.has(isoDate(addDays(parseDate(di), 1)))) continue;
+      good.push(WEEKDAYS[weekdayMon0(parseDate(di))]);
+    }
+    li(`Gut geeignete Krafttage in den nächsten 7 Tagen: <b>${good.length ? good.join(", ") : "–"}</b> (kein hartes Radtraining am selben oder nächsten Tag).`);
+  }
+  c3.appendChild(ul);
+
+  // Hinweise
+  const tips = [];
+  if (perWeek8 < 1) tips.push({ cls: "warning", label: "Häufigkeit", text: `Im Schnitt ${r1(perWeek8)}× pro Woche. Für Radfahrer bringen 2 Einheiten à 30–45 min pro Woche den meisten Nutzen (Kraft, Verletzungsschutz, Rumpfstabilität).` });
+  else if (perWeek8 < 2) tips.push({ cls: "warning", label: "Häufigkeit", text: `${r1(perWeek8)}× pro Woche – schon gut. Eine zweite feste Einheit pro Woche macht den Unterschied.` });
+  else tips.push({ cls: "good", label: "Häufigkeit", text: `${r1(perWeek8)}× pro Woche über 8 Wochen – sehr konsequent.` });
+  if (avgMin < 25) tips.push({ cls: "warning", label: "Dauer", text: `Ø ${Math.round(avgMin)} min. Für Kraftzuwachs eher 30–45 min mit 3–4 Sätzen pro Übung einplanen.` });
+  if (dayBefore >= 3) tips.push({ cls: "warning", label: "Timing", text: "Mehrmals Kraft am Tag vor harten Intervallen. Besser: Kraft direkt nach einer harten Radeinheit (gleicher Tag) oder an lockeren Tagen – so bleiben die Beine für die Intervalle frisch." });
+  const phase = plan?.weeks.find(w => w.start <= today && today < isoDate(addDays(parseDate(w.start), 7)))?.phase;
+  const phaseTxt = { base: "Grundlagenphase: ideale Zeit für Maximalkraft – 2× pro Woche, schwere Gewichte, wenige Wiederholungen (z. B. Kniebeuge, Kreuzheben, Ausfallschritte).",
+    build: "Aufbauphase: Kraft auf 1–2× pro Woche halten, Fokus auf Explosivität und Rumpf.", peak: "Spitzenphase: 1× pro Woche kurz zum Erhalt, keine neuen schweren Reize.",
+    taper: "Tapering: Krafttraining pausieren oder nur sehr leicht.", recovery: "Erholungswoche: Kraft leicht und kurz, gerne Mobilität.", test: "Testwoche: vor dem FTP-Test 2 Tage kein Beintraining." }[phase];
+  if (phaseTxt) tips.push({ cls: "good", label: "Passend zur Planphase", text: phaseTxt });
+  addTips(card("Hinweise"), tips);
+}
+
+// ================================================================ Fazit
+function verdictScores() {
+  const P = S.performance, st = S.settings;
+  const acts = P?.activities_list || [];
+  const out = [];
+  if (!acts.length) return out;
+  // 1) Umfang Ausdauer
+  const endu = acts.filter(a => ENDURANCE_TYPES.has(a.type) && a.date > daysAgo(84));
+  const hpw = endu.reduce((x, a) => x + a.minutes, 0) / 60 / 12, target = Number(st.weekly_hours) || 6;
+  out.push({ key: "Umfang", score: Math.min(100, hpw / target * 100), detail: `${r1(hpw)} h Ausdauer pro Woche (Ziel ${target} h)`,
+    good: "Du erreichst deinen geplanten Umfang.", action: `Den Ausdauerumfang Schritt für Schritt auf ${target} h pro Woche bringen – am leichtesten über eine längere, lockere Ausfahrt am Wochenende.` });
+  // 2) Regelmäßigkeit
+  let regular = 0;
+  for (let i = 0; i < 8; i++) { const a0 = daysAgo(7 * (i + 1)), b0 = daysAgo(7 * i); if (acts.filter(x => x.date > a0 && x.date <= b0).length >= 3) regular++; }
+  out.push({ key: "Regelmäßigkeit", score: regular / 8 * 100, detail: `${regular} von 8 Wochen mit mind. 3 Einheiten`,
+    good: "Du trainierst sehr regelmäßig – die wichtigste Grundlage.", action: "Feste Trainingstage einhalten: lieber eine kurze Einheit als eine ausgefallene. Die Kalender-Automatik hilft dabei." });
+  // 3) Intensitätsverteilung (nur mit Leistungsmesser)
+  const ftp = Number(st.ftp) || 200;
+  const rides = acts.filter(a => a.np && a.power && a.date > daysAgo(84));
+  if (rides.length >= 5) {
+    const tot = rides.reduce((x, a) => x + a.minutes, 0) || 1;
+    const easy = rides.filter(a => a.np / ftp < 0.75).reduce((x, a) => x + a.minutes, 0) / tot;
+    const hard = rides.filter(a => a.np / ftp >= 0.9).reduce((x, a) => x + a.minutes, 0) / tot;
+    let score = easy >= 0.7 && easy <= 0.85 ? 100 : easy < 0.7 ? Math.max(20, 100 - (0.7 - easy) * 300) : Math.max(40, 100 - (easy - 0.85) * 300);
+    let action = easy < 0.7 ? "Zu viel im mittleren Bereich: Lockere Einheiten wirklich locker fahren (unter 75 % FTP), harte dafür gezielt hart."
+      : "Fast nur locker: 1–2 strukturierte Intervalleinheiten pro Woche (Sweet Spot, Schwelle) setzen die nötigen Reize.";
+    if (easy > 0.85 && hard < 0.05) score = Math.min(score, 60);
+    out.push({ key: "Intensität", score, detail: `${Math.round(easy * 100)} % locker, ${Math.round(hard * 100)} % hart (nach Fahrzeit)`,
+      good: "Gute Mischung aus lockerem Grundlagentraining und harten Reizen.", action });
+  }
+  // 4) Kraft
+  const { perWeek8 } = strengthStats();
+  out.push({ key: "Kraft", score: perWeek8 >= 2 ? 100 : perWeek8 >= 1.5 ? 80 : perWeek8 >= 1 ? 60 : perWeek8 >= 0.5 ? 35 : 10,
+    detail: `${r1(perWeek8)}× Krafttraining pro Woche (8 Wochen)`, good: "Krafttraining ist fester Bestandteil deiner Woche.",
+    action: "Krafttraining auf 2× pro Woche à 30–45 min bringen – Fokus Beine, Gesäß und Rumpf. Am besten an lockeren Radtagen." });
+  // 5) Erholung (Garmin)
+  const R = typeof recoveryStats === "function" ? recoveryStats() : {};
+  if (R.sleepH?.avg7 != null || R.hrv?.avg7 != null) {
+    const h = R.sleepH?.avg7;
+    let score = h == null ? 70 : h >= 7.5 ? 100 : h >= 7 ? 85 : h >= 6.5 ? 65 : h >= 6 ? 45 : 25;
+    const hrvLow = R.hrv?.avg7 != null && R.hrv.base != null && R.hrv.avg7 < R.hrv.base - R.hrv.sd;
+    if (hrvLow) score -= 20;
+    out.push({ key: "Erholung", score: Math.max(0, score), detail: `${h != null ? r1(h) + " h Schlaf" : "Schlaf –"}${R.hrv?.avg7 != null ? ` · HRV ${Math.round(R.hrv.avg7)} ms${hrvLow ? " (unter Normal)" : ""}` : ""}`,
+      good: "Schlaf und HRV sprechen für gute Erholung.", action: "Mehr Erholung: 7,5 h Schlaf anpeilen und an Tagen mit niedriger HRV nur locker fahren." });
+  }
+  // 6) Fitness-Entwicklung (CTL über 6 Wochen)
+  if (P.series?.length > 42) {
+    const now = P.series.at(-1).ctl, before = P.series.at(-43).ctl, delta = now - before;
+    out.push({ key: "Entwicklung", score: Math.max(10, Math.min(100, 60 + delta * 6)), detail: `Fitness (CTL) ${delta >= 0 ? "+" : ""}${r1(delta)} in 6 Wochen`,
+      good: "Deine Fitness steigt stetig.", action: "Belastung langsam und stetig steigern (etwa +3 bis +5 CTL pro Woche) und Erholungswochen einhalten – der Plan ist darauf ausgelegt." });
+  }
+  // 7) Leistungsniveau
+  if (st.ftp && st.weight) {
+    const wkg = st.ftp / st.weight;
+    out.push({ key: "Leistung", score: wkg >= 4 ? 100 : wkg >= 3.5 ? 88 : wkg >= 3 ? 75 : wkg >= 2.5 ? 60 : 45, detail: `${wkg.toFixed(2)} W/kg (FTP ${st.ftp} W)`,
+      good: "Starkes Leistungsniveau im Verhältnis zum Gewicht.",
+      action: `W/kg steigern: Schwellen- und Sweet-Spot-Intervalle für die FTP${st.target_ftp ? ` (Ziel ${st.target_ftp} W)` : ""}, dazu Gewicht stabil halten.` });
+  }
+  return out.map(s => ({ ...s, score: Math.round(s.score) }));
+}
+
+function renderVerdict() {
+  const scores = verdictScores();
+  if (!scores.length) { note(card("Fazit"), "Für das Fazit unter <b>Leistung</b> deine Aktivitäten laden."); return; }
+  const total = Math.round(avg(scores.map(s => s.score)));
+  const label = total >= 85 ? "Sehr gut" : total >= 70 ? "Gut" : total >= 50 ? "Ausbaufähig" : "Viel Potenzial";
+  // Gesamtbewertung als Ring
+  const c = card("Fazit zur allgemeinen Fitness", "Einschätzung nach Faustregeln aus deinen Daten der letzten 8–12 Wochen – keine medizinische Bewertung.");
+  const hero = document.createElement("div"); hero.className = "score-hero";
+  const R = 52, L = 2 * Math.PI * R;
+  hero.innerHTML = `<svg viewBox="0 0 128 128" class="score-ring" role="img" aria-label="Gesamtwert ${total} von 100">
+      <defs><linearGradient id="sg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff6639"/><stop offset="1" stop-color="#ff2e7e"/></linearGradient></defs>
+      <circle cx="64" cy="64" r="${R}" class="ring-bg"/>
+      <circle cx="64" cy="64" r="${R}" class="ring-fg" stroke="url(#sg)" stroke-dasharray="${L * total / 100} ${L}" transform="rotate(-90 64 64)"/>
+      <text x="64" y="62" text-anchor="middle" class="ring-num">${total}</text><text x="64" y="82" text-anchor="middle" class="ring-sub">von 100</text></svg>
+    <div><div class="score-label">${label}</div><div class="muted">${scores.length} Bereiche bewertet</div></div>`;
+  c.appendChild(hero);
+  // Bereiche
+  const list = document.createElement("div"); list.className = "score-list";
+  for (const s of scores) {
+    const row = document.createElement("div"); row.className = "score-row";
+    row.innerHTML = `<div class="score-top"><b>${esc(s.key)}</b><span>${s.score}</span></div>
+      <div class="score-bar"><i style="width:${s.score}%"></i></div><div class="muted">${esc(s.detail)}</div>`;
+    list.appendChild(row);
+  }
+  c.appendChild(list);
+  // Stärken & Verbesserungen
+  const sorted = [...scores].sort((a, b) => a.score - b.score);
+  const improve = sorted.filter(s => s.score < 80).slice(0, 3);
+  const strong = [...scores].sort((a, b) => b.score - a.score).filter(s => s.score >= 75).slice(0, 2);
+  const ci = card("Was du künftig verbessern solltest");
+  if (improve.length) {
+    const ol = document.createElement("ol"); ol.className = "prio";
+    for (const s of improve) { const li = document.createElement("li"); li.innerHTML = `<b>${esc(s.key)}</b><span>${esc(s.action)}</span>`; ol.appendChild(li); }
+    ci.appendChild(ol);
+  } else note(ci, "Alle Bereiche liegen auf gutem Niveau – weiter so, und die Belastung behutsam steigern.");
+  if (strong.length) addTips(card("Deine Stärken"), strong.map(s => ({ cls: "good", label: s.key, text: s.good })));
 }
 
 // Neu zeichnen bei Größen- oder Farbwechsel und beim Öffnen der Seite (unabhängig von app.js)

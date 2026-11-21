@@ -163,7 +163,7 @@ async function icuLoadPerformance() {
   ]);
   const ride = (ath.sportSettings || []).find(s => (s.types || []).some(t => /Ride/.test(t)));
   const list = (acts || []).filter(a => a.start_date_local).map(a => ({
-    date: a.start_date_local.slice(0, 10), name: a.name || a.type, type: a.type,
+    date: a.start_date_local.slice(0, 10), time: a.start_date_local.slice(11, 16), name: a.name || a.type, type: a.type,
     minutes: Math.round((a.moving_time || a.elapsed_time || 0) / 60),
     km: a.distance ? Math.round(a.distance / 100) / 10 : 0, elev: Math.round(a.total_elevation_gain || 0),
     np: a.icu_weighted_avg_watts || null, power: !!a.device_watts || !!a.icu_weighted_avg_watts,
@@ -234,7 +234,7 @@ async function stravaLoadPerformance() {
     page++;
   }
   const ath = await stravaGet("/athlete");
-  const list = acts.map(a => ({ date: a.start_date_local.slice(0, 10), name: a.name, type: a.sport_type || a.type,
+  const list = acts.map(a => ({ date: a.start_date_local.slice(0, 10), time: a.start_date_local.slice(11, 16), name: a.name, type: a.sport_type || a.type,
     minutes: Math.round(a.moving_time / 60), km: Math.round((a.distance || 0) / 100) / 10,
     elev: Math.round(a.total_elevation_gain || 0), power: !!a.device_watts,
     np: a.device_watts ? a.weighted_average_watts : null, hr: a.average_heartrate || null }));
@@ -383,6 +383,7 @@ function renderPlan() {
     $("planTitle").textContent = "Noch kein Plan";
     $("planSub").textContent = "";
     $("planNav").hidden = true;
+    $("todayCard").innerHTML = "";
     $("weeks").innerHTML = `<div class="card muted">Lege im Menü unter „Ziel & Profil“ dein Ziel und deine Trainingstage fest und erstelle den Plan.</div>`;
     return;
   }
@@ -391,6 +392,18 @@ function renderPlan() {
   const today = todayIso();
   $("planNav").hidden = view === "all";
   const dayById = new Map(P.weeks.flatMap(w => w.days.map(d => [d.date, d])));
+
+  // Heute-Karte: heutige bzw. nächste Einheit groß oben
+  const next = P.weeks.flatMap(w => w.days).find(d => d.date >= today);
+  if (next) {
+    const o = next.workout;
+    const eyebrow = next.date === today ? "Heute" : next.date === isoDate(addDays(new Date(), 1)) ? "Morgen" : `Nächste Einheit · ${next.weekday} ${dm(next.date)}`;
+    $("todayCard").innerHTML = `<div class="today-card" data-id="${o.id}"><div class="eyebrow">${eyebrow}</div>
+      <div class="t-name">${esc(o.name)}</div><div class="t-meta">${next.time ? next.time + " Uhr · " : ""}${esc(o.desc)}</div>
+      ${profile(o.segments, 64)}
+      ${o.minutes ? `<div class="t-stats"><div><b>${o.minutes}′</b><span>Dauer</span></div><div><b>${o.tss}</b><span>TSS</span></div><div><b>${o.if}</b><span>IF</span></div></div>` : ""}
+      ${next.note ? `<div class="wnote">${esc(next.note)}</div>` : ""}</div>`;
+  } else $("todayCard").innerHTML = "";
 
   if (view === "week") {
     const i = Math.max(0, Math.min(P.weeks.length - 1, weekOfToday(P) + (S.ui.weekOffset || 0)));
@@ -439,7 +452,7 @@ function renderPlan() {
           <div class="d">${d.workout.minutes ? d.workout.minutes + " min · TSS " + d.workout.tss : ""}</div></div>`).join("")}</div></div>`;
     }).join("");
   }
-  document.querySelectorAll("#weeks [data-id]").forEach(el => el.onclick = () => detail(el.dataset.id));
+  document.querySelectorAll("#weeks [data-id], #todayCard [data-id]").forEach(el => el.onclick = () => detail(el.dataset.id));
 }
 document.querySelectorAll("#viewSeg button").forEach(b => b.onclick = () => { S.ui.planView = b.dataset.v; save(); renderPlan(); });
 $("navPrev").onclick = () => { S.ui[S.ui.planView === "month" ? "monthOffset" : "weekOffset"] = (S.ui[S.ui.planView === "month" ? "monthOffset" : "weekOffset"] || 0) - 1; save(); renderPlan(); };

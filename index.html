@@ -317,33 +317,19 @@
     <div id="calLog"></div>
   </div>
   <div class="card">
-    <h2>Kurzbefehl einrichten</h2>
-    <p class="muted">Einmalig in der App „Kurzbefehle“. Übertragen werden nur Beginn und Ende deiner Termine – keine Titel, Orte oder Teilnehmer. Ganztägige Termine ignoriert RoadToFTP.</p>
-    <h3 style="margin-top:4px">Am einfachsten (iOS 27): per Beschreibung</h3>
+    <h2>Tages-Automatik einrichten</h2>
+    <p class="muted">Einmal am Tag – ohne dass du RoadToFTP öffnest: Termine lesen, Plan anpassen, an intervals.icu (Zwift, Garmin) senden und die Einheiten in deinen iPhone-Kalender eintragen. Dafür nutzt RoadToFTP die kostenlose App <b>Scriptable</b>, die Skripte im Hintergrund ausführen und den Kalender lesen und schreiben darf. Übertragen werden nur Beginn und Ende deiner Termine, keine Titel.</p>
     <ol class="steps">
-      <li>Text unten kopieren.</li>
-      <li>Kurzbefehle öffnen → neuen Kurzbefehl → <b>mit Beschreibung erstellen</b> und den Text einfügen.</li>
-      <li>Im fertigen Kurzbefehl bei „Inhalt von URL abrufen“ den Header-Wert <code>HIER_HEADER_EINFÜGEN</code> durch den Wert ganz unten ersetzen (Taste „Kopieren“). So gelangt dein Schlüssel nicht in die Beschreibung.</li>
-      <li>Einmal ausführen, Zugriffe erlauben, dann hier „Jetzt prüfen“.</li>
+      <li><b>Scriptable</b> aus dem App Store laden (kostenlos).</li>
+      <li>Optional: In der Kalender-App einen Kalender <b>RoadToFTP</b> anlegen – dann landen die Einheiten dort und lassen sich ein- und ausblenden. Sonst nutzt RoadToFTP deinen Standardkalender.</li>
+      <li>Unten <b>„Skript kopieren“</b> → Scriptable öffnen → <b>+</b> → einfügen → oben den Namen <b>RoadToFTP</b> vergeben → <b>▶︎</b> ausführen.</li>
+      <li>Beim ersten Lauf deinen intervals.icu API-Schlüssel einfügen (wird sicher im Schlüsselbund gespeichert) und Zugriff auf Kalender und Mitteilungen erlauben.</li>
+      <li>Kurzbefehle → <b>Automation</b> → <b>+</b> → <b>Tageszeit</b> 05:00, täglich → <b>Sofort ausführen</b> → Aktion <b>Skript ausführen</b> (Scriptable) → <b>RoadToFTP</b>. Optional eine zweite Automation um 12:00.</li>
     </ol>
-    <textarea id="calPrompt" readonly rows="8" style="width:100%;font:inherit;font-size:13px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--soft);color:var(--ink)">Erstelle einen Kurzbefehl namens „RTF Kalender“: Suche alle Kalenderereignisse, die in den nächsten 14 Tagen beginnen, sortiert nach Startdatum. Erzeuge für jedes Ereignis eine Textzeile im Format Startdatum|Enddatum, beide Datumswerte im Format ISO 8601 mit Uhrzeit. Verbinde alle Zeilen mit Zeilenumbrüchen. Sende dann mit „Inhalt von URL abrufen“ eine POST-Anfrage an https://intervals.icu/api/v1/athlete/0/events mit dem Header Authorization = HIER_HEADER_EINFÜGEN und einem JSON-Anfragetext mit den Textfeldern category = NOTE, start_date_local = 2000-01-01T00:00:00, name = RTF Kalender und description = die verbundenen Zeilen.</textarea>
-    <div class="row" style="margin:8px 0 4px"><button class="btn sec" id="calPromptCopy">Beschreibung kopieren</button></div>
-    <h3>Oder von Hand (ältere Oberfläche)</h3>
-    <ol class="steps">
-      <li>Kurzbefehle öffnen → <b>+</b> → Name <b>RTF Kalender</b>.</li>
-      <li>Aktion <b>Kalenderereignisse suchen</b> hinzufügen. Filter: <i>Startdatum</i> · <i>liegt in den nächsten</i> · <b>14 Tage</b>. Sortieren nach <i>Startdatum</i>, Limit aus.</li>
-      <li>Aktion <b>Wiederholen mit jedem</b> hinzufügen (Eingabe: Kalenderereignisse).</li>
-      <li>Innerhalb der Wiederholung Aktion <b>Text</b> mit Inhalt: <code>Wiederholungsobjekt.Startdatum</code> <b>|</b> <code>Wiederholungsobjekt.Enddatum</code>. Bei beiden Datumsvariablen antippen → Datumsformat <b>ISO 8601</b>, <b>Zeit einbeziehen</b> an.</li>
-      <li>Nach <i>Ende der Wiederholung</i>: Aktion <b>Text kombinieren</b> (Wiederholungsergebnisse) mit <b>Neue Zeilen</b>.</li>
-      <li>Aktion <b>Inhalt von URL abrufen</b>: URL <code>https://intervals.icu/api/v1/athlete/0/events</code> · Methode <b>POST</b> · Header <code>Authorization</code> = Wert unten · Anfragetext <b>JSON</b> mit den Textfeldern:
-        <code>category</code> = <code>NOTE</code>, <code>start_date_local</code> = <code>2000-01-01T00:00:00</code>, <code>name</code> = <code>RTF Kalender</code>, <code>description</code> = <i>Kombinierter Text</i>.</li>
-      <li>Tab <b>Automation</b> → <b>+</b> → <b>Tageszeit</b> 05:00, täglich → <b>Sofort ausführen</b> → Kurzbefehl <b>RTF Kalender</b>. Optional eine zweite Automation um 12:00.</li>
-    </ol>
-    <label for="calHeader">Wert für den Header „Authorization“</label>
-    <div class="row"><input id="calHeader" readonly style="flex:1"><button class="btn sec" id="calCopy">Kopieren</button></div>
-    <p class="muted">Enthält deinen intervals.icu-Schlüssel – nicht weitergeben. Nach dem ersten Lauf des Kurzbefehls hier auf „Jetzt prüfen“ tippen.</p>
-  </div>
-</section>
+    <textarea id="calScript" readonly rows="8" style="width:100%;font:12px/1.4 ui-monospace,Menlo,monospace;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--soft);color:var(--ink)">Skript wird geladen …</textarea>
+    <div class="row" style="margin-top:8px"><button class="btn" id="calScriptCopy">Skript kopieren</button></div>
+    <p class="muted">Das Skript holt sich die Planungslogik bei jedem Lauf frisch von RoadToFTP – Verbesserungen kommen automatisch an. Bei Änderungen bekommst du morgens eine Mitteilung, z. B. „Tempo von Do auf Fr verschoben“.</p>
+  </div></section>
 <!-- DATEN -->
 <section id="daten">
   <div class="card">
@@ -430,10 +416,10 @@
 
 <dialog id="dlg"><div id="dlgBody"></div><p style="text-align:right;margin-bottom:0"><button class="btn sec" onclick="document.getElementById('dlg').close()">Schließen</button></p></dialog>
 
-<script src="planner.js?v=10"></script>
-<script src="charts.js?v=10"></script>
-<script src="analysis.js?v=10"></script>
-<script src="calendar.js?v=10"></script>
-<script src="app.js?v=10"></script>
+<script src="planner.js?v=11"></script>
+<script src="charts.js?v=11"></script>
+<script src="analysis.js?v=11"></script>
+<script src="calendar.js?v=11"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>

@@ -140,6 +140,63 @@ function adaptPlan(base, cal, st) {
   return { plan, log };
 }
 
+// ---------------------------------------------------------------- Senden an intervals.icu (→ Zwift, Garmin)
+async function icuPushPlan() {
+  if (!S.plan) throw new Error("Bitte zuerst einen Plan erstellen.");
+  const today = todayIso();
+  const events = [];
+  for (const w of S.plan.weeks) for (const d of w.days) {
+    if (d.date < today) continue;
+    const wo = d.workout;
+    if (wo.kind === "event") {
+      events.push({ category: "RACE_A", start_date_local: `${d.date}T00:00:00`, type: "Ride", name: wo.name,
+                    external_id: `rtf-${d.date}-event` });
+      continue;
+    }
+    events.push({
+      category: "WORKOUT", type: "VirtualRide", name: `RTF ${wo.name}`,
+      start_date_local: `${d.date}T${d.time || "18:00"}:00`,
+      description: workoutToIcuText(wo), moving_time: wo.minutes * 60, icu_training_load: wo.tss,
+      external_id: `rtf-${d.date}`,
+    });
+  }
+  if (!events.length) throw new Error("Keine zukünftigen Einheiten im Plan.");
+  await icu("/events/bulk?upsert=true", { method: "POST", body: JSON.stringify(events) });
+  // Alte RTF-Einheiten entfernen, die nicht mehr im Plan sind (nur ab heute)
+  const last = events[events.length - 1].start_date_local.slice(0, 10);
+  const keep = new Set(events.map(e => e.external_id));
+  const existing = await icu(`/events?oldest=${today}&newest=${isoDate(addDays(parseDate(last), 60))}`);
+  let removed = 0;
+  for (const e of existing || []) {
+    if (e.external_id && e.external_id.startsWith("rtf-") && !keep.has(e.external_id)) {
+      await icu(`/events/${e.id}`, { method: "DELETE" }); removed++;
+    }
+  }
+  return { count: events.length, removed };
+}
+
+// ---------------------------------------------------------------- Plan-Einstellungen für die Hintergrund-Automatik
+// Die Automatik (Scriptable) rechnet den Plan aus denselben Eingaben exakt nach. Dafür liegen Einstellungen
+// und Leistungsstand zum Zeitpunkt der Planerstellung als Notiz "RTF Plan" am 02.01.2000 in intervals.icu.
+const PLAN_NOTE_DATE = "2000-01-02", PLAN_NOTE_NAME = "RTF Plan";
+function planConfig() {
+  if (!S.planBase) return null;
+  const st = S.planSettings || S.settings;
+  return JSON.stringify({ v: 1,
+    settings: { ...st, start_date: S.planBase.weeks[0].start, cal: S.settings.cal || {} },
+    perf: S.planPerf || { weekly_hours_avg: S.performance?.weekly_hours_avg ?? null, tsb: S.performance?.tsb ?? null } });
+}
+async function publishPlanConfig() {
+  const txt = planConfig();
+  if (!txt || S.cal?.cfgPublished === txt) return;
+  const ev = await icu(`/events?oldest=${PLAN_NOTE_DATE}&newest=${PLAN_NOTE_DATE}`);
+  for (const n of (ev || []).filter(e => (e.name || "").startsWith(PLAN_NOTE_NAME)))
+    await icu(`/events/${n.id}`, { method: "DELETE" }).catch(() => {});
+  await icu("/events", { method: "POST", body: JSON.stringify({
+    category: "NOTE", start_date_local: `${PLAN_NOTE_DATE}T00:00:00`, name: PLAN_NOTE_NAME, description: txt }) });
+  S.cal = { ...(S.cal || {}), cfgPublished: txt };
+}
+
 // ---------------------------------------------------------------- Ablauf
 function applyCalendar() {
   if (!S.planBase) return;
@@ -155,6 +212,7 @@ async function autoCalendarSync({ silent = true } = {}) {
   if (!S.icu?.key || !S.planBase) return;
   S.cal = S.cal || {};
   try {
+    await publishPlanConfig();
     const data = await calFetchBusy();
     if (data) S.cal.data = data;
     S.cal.lastCheck = new Date().toISOString();
@@ -201,7 +259,7 @@ function renderCalendar() {
   const fmtTs = s => s ? new Date(s).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–";
   const now = Date.now(), next = data ? data.busy.filter(b => b.e > now && b.s < now + 14 * 864e5).length : 0;
   let st = !S.icu?.key ? "Zuerst intervals.icu unter „Leistung“ verbinden."
-    : !data ? "Noch keine Termine empfangen. Richte den Kurzbefehl ein (Anleitung unten)."
+    : !data ? "Noch keine Termine empfangen. Richte die Tages-Automatik ein (Anleitung unten)."
     : `${next} Termine in den nächsten 14 Tagen · empfangen ${fmtTs(data.received || data.fetched)} · geprüft ${fmtTs(cal.lastCheck)}` +
       (cal.lastPush ? ` · gesendet ${fmtTs(cal.lastPush)}` : "");
   if (cal.error) st += ` · Fehler: ${cal.error}`;
@@ -210,7 +268,6 @@ function renderCalendar() {
   $("calLog").innerHTML = log.length ? `<ul class="facts">${log.map(l =>
     `<li><b>${l.date.slice(8, 10)}.${l.date.slice(5, 7)}.</b> ${esc(l.name)} – ${esc(l.text)}</li>`).join("")}</ul>`
     : (data ? `<p class="muted">Alle Einheiten passen in deine freien Zeiten.</p>` : "");
-  $("calHeader").value = S.icu?.key ? "Basic " + btoa("API_KEY:" + S.icu.key) : "";
 }
 
 function calBindUi() {
@@ -232,12 +289,10 @@ function calBindUi() {
     catch (err) { msg("calMsg", "Test fehlgeschlagen: " + esc(err.message), false); }
     busy(e.target, false);
   };
-  $("calPromptCopy").onclick = async () => {
-    try { await navigator.clipboard.writeText($("calPrompt").value); msg("calMsg", "Beschreibung kopiert – jetzt in Kurzbefehle einfügen."); }
-    catch { $("calPrompt").select(); msg("calMsg", "Bitte den markierten Text manuell kopieren.", false); }
-  };
-  $("calCopy").onclick = async () => {
-    try { await navigator.clipboard.writeText($("calHeader").value); msg("calMsg", "Header-Wert kopiert."); }
-    catch { $("calHeader").select(); msg("calMsg", "Bitte den markierten Wert manuell kopieren.", false); }
+  // Starter-Skript für Scriptable anzeigen und kopieren
+  fetch("scriptable-starter.js", { cache: "no-cache" }).then(r => r.text()).then(t => { $("calScript").value = t; }).catch(() => {});
+  $("calScriptCopy").onclick = async () => {
+    try { await navigator.clipboard.writeText($("calScript").value); msg("calMsg", "Skript kopiert – jetzt in Scriptable einfügen."); }
+    catch { $("calScript").select(); msg("calMsg", "Bitte den markierten Text manuell kopieren.", false); }
   };
 }

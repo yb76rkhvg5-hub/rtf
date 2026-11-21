@@ -132,6 +132,9 @@ function generate(fromEl) {
   try {
     S.settings = { ...collect(), cal: S.settings.cal };
     S.planBase = generatePlan(S.settings, S.performance);
+    // Eingaben merken, damit die Hintergrund-Automatik den Plan identisch nachrechnen kann
+    S.planSettings = structuredClone(S.settings);
+    S.planPerf = { weekly_hours_avg: S.performance?.weekly_hours_avg ?? null, tsb: S.performance?.tsb ?? null };
     applyCalendar();
     S.ui.weekOffset = 0; S.ui.monthOffset = 0;
     save(); renderAll(); show("plan");
@@ -186,39 +189,7 @@ async function icuLoadPerformance() {
   return perf;
 }
 
-async function icuPushPlan() {
-  if (!S.plan) throw new Error("Bitte zuerst einen Plan erstellen.");
-  const today = todayIso();
-  const events = [];
-  for (const w of S.plan.weeks) for (const d of w.days) {
-    if (d.date < today) continue;
-    const wo = d.workout;
-    if (wo.kind === "event") {
-      events.push({ category: "RACE_A", start_date_local: `${d.date}T00:00:00`, type: "Ride", name: wo.name,
-                    external_id: `rtf-${d.date}-event` });
-      continue;
-    }
-    events.push({
-      category: "WORKOUT", type: "VirtualRide", name: `RTF ${wo.name}`,
-      start_date_local: `${d.date}T${d.time || "18:00"}:00`,
-      description: workoutToIcuText(wo), moving_time: wo.minutes * 60, icu_training_load: wo.tss,
-      external_id: `rtf-${d.date}`,
-    });
-  }
-  if (!events.length) throw new Error("Keine zukünftigen Einheiten im Plan.");
-  await icu("/events/bulk?upsert=true", { method: "POST", body: JSON.stringify(events) });
-  // Alte RTF-Einheiten entfernen, die nicht mehr im Plan sind (nur ab heute)
-  const last = events[events.length - 1].start_date_local.slice(0, 10);
-  const keep = new Set(events.map(e => e.external_id));
-  const existing = await icu(`/events?oldest=${today}&newest=${isoDate(addDays(parseDate(last), 60))}`);
-  let removed = 0;
-  for (const e of existing || []) {
-    if (e.external_id && e.external_id.startsWith("rtf-") && !keep.has(e.external_id)) {
-      await icu(`/events/${e.id}`, { method: "DELETE" }); removed++;
-    }
-  }
-  return { count: events.length, removed };
-}
+// icuPushPlan() liegt in calendar.js (gemeinsam mit der Hintergrund-Automatik)
 
 // ================================================================ Strava (OAuth direkt aus dem Browser)
 const REDIRECT = location.origin + location.pathname;

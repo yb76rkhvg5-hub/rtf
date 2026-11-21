@@ -33,21 +33,26 @@ async function targetCalendar() {
   catch { return await ENV.Calendar.defaultForEvents(); }
 }
 
-/** Belegte Zeiten aus allen Kalendern, ohne ganztägige und ohne eigene RoadToFTP-Einträge */
+/** Belegte Zeiten aus allen Kalendern (mit Kalendername), ohne ganztägige und ohne eigene RoadToFTP-Einträge.
+ *  Welche Kalender zählen, entscheidet die Auswahl in der App (settings.cal.exclude) – gefiltert wird in adaptPlan. */
+var CAL_TITLES = [];
 async function readBusy(days) {
   const start = new Date(); start.setHours(0, 0, 0, 0);
   const end = addDays(start, days + 1);
-  const cals = await ENV.Calendar.forEvents();
+  const cals = (await ENV.Calendar.forEvents()).filter(c => c.title !== "RoadToFTP");
+  CAL_TITLES = [...new Set(cals.map(c => c.title))].sort();
   const evs = await ENV.CalendarEvent.between(start, end, cals);
-  return evs.filter(e => !e.isAllDay && !String(e.notes || "").includes(MARK) && e.calendar?.title !== "RoadToFTP")
-    .map(e => ({ s: e.startDate.getTime(), e: e.endDate.getTime() }));
+  return evs.filter(e => !e.isAllDay && !String(e.notes || "").includes(MARK))
+    .map(e => ({ s: e.startDate.getTime(), e: e.endDate.getTime(), cal: e.calendar?.title || "" }));
 }
 
 /** Busy-Notiz für die App aktualisieren, damit sie beim Öffnen dieselbe Anpassung zeigt */
 async function writeBusyNote(busy) {
   const ev = await icu(`/events?oldest=${CAL_NOTE_DATE}&newest=${CAL_NOTE_DATE}`);
   for (const n of (ev || []).filter(e => (e.name || "").startsWith(CAL_NOTE_NAME))) await icu(`/events/${n.id}`, { method: "DELETE" }).catch(() => {});
-  const lines = busy.map(b => `${new Date(b.s).toISOString()}|${new Date(b.e).toISOString()}`).join("\n");
+  const clean = t => String(t).replace(/[|\n]/g, " ");
+  const lines = [`#kalender: ${JSON.stringify(CAL_TITLES)}`]
+    .concat(busy.map(b => `${new Date(b.s).toISOString()}|${new Date(b.e).toISOString()}|${clean(b.cal)}`)).join("\n");
   await icu("/events", { method: "POST", body: JSON.stringify({
     category: "NOTE", start_date_local: `${CAL_NOTE_DATE}T00:00:00`, name: CAL_NOTE_NAME, description: lines }) });
 }

@@ -6,7 +6,7 @@
 
 const CAL_NOTE_DATE = "2000-01-01";
 const CAL_NOTE_NAME = "RTF Kalender";
-const CAL_DEFAULTS = { earliest: "05:30", latest: "21:30", buffer: 15, horizon: 14, autopush: true,
+const CAL_DEFAULTS = { earliest: "05:30", latest: "21:30", buffer: 15, horizon: 14, autopush: true, exclude: [],
   work: { active: true, from: "06:40", to: "19:00", doneBy: "06:10", days: [0, 1, 2, 3, 4] } }; // feste Arbeitszeit (Mo–Fr), morgens fertig bis
 
 /** Feste Arbeitszeit als belegte Blöcke für jeden Tag im Zeitraum */
@@ -36,11 +36,16 @@ function parseCalDate(s) {
   return null;
 }
 function parseBusy(text) {
-  return String(text || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => {
-    const [a, b] = l.split("|");
+  return String(text || "").split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith("#")).map(l => {
+    const [a, b, cal] = l.split("|");
     const s = a && parseCalDate(a), e = b && parseCalDate(b);
-    return s && e ? { s: s.getTime(), e: e.getTime() } : null;
+    return s && e ? { s: s.getTime(), e: e.getTime(), cal: (cal || "").trim() } : null;
   }).filter(x => x && x.e > x.s && x.e - x.s < 23 * 3600e3); // ganztägige Termine ignorieren
+}
+/** Kalendernamen aus der Kopfzeile "#kalender: [...]" (liefert das Scriptable-Skript) */
+function parseCalendars(text) {
+  const m = String(text || "").match(/^#kalender:\s*(\[.*\])\s*$/m);
+  try { return m ? JSON.parse(m[1]) : []; } catch { return []; }
 }
 
 async function calFetchBusy() {
@@ -49,8 +54,8 @@ async function calFetchBusy() {
   if (!notes.length) return null;
   // nur die neueste Notiz behalten, ältere aufräumen
   for (const n of notes.slice(1)) icu(`/events/${n.id}`, { method: "DELETE" }).catch(() => {});
-  const busy = parseBusy(notes[0].description);
-  return { id: notes[0].id, received: notes[0].updated || notes[0].created || null, fetched: new Date().toISOString(), busy };
+  const busy = parseBusy(notes[0].description), calendars = parseCalendars(notes[0].description);
+  return { id: notes[0].id, received: notes[0].updated || notes[0].created || null, fetched: new Date().toISOString(), busy, calendars };
 }
 
 // ---------------------------------------------------------------- Planen
@@ -108,7 +113,8 @@ function adaptPlan(base, cal, st) {
   const planEnd = plan.weeks.at(-1) ? isoDate(addDays(parseDate(plan.weeks.at(-1).start), 6)) : today;
   // Kalendertermine kennen wir für ~14 Tage, die Arbeitszeit für den ganzen Plan
   const horizon = c.work.active ? planEnd : isoDate(addDays(new Date(), c.horizon));
-  const busyAll = [...(cal?.busy || []), ...workBlocks(c, today, horizon)];
+  const exclude = new Set(c.exclude || []); // abgewählte Kalender (z. B. geteilter Kalender der Partnerin)
+  const busyAll = [...(cal?.busy || []).filter(b => !exclude.has(b.cal)), ...workBlocks(c, today, horizon)];
   if (!busyAll.length) return { plan, log };
   cal = { ...(cal || {}), busy: busyAll };
   const easy = k => ["endurance", "recovery"].includes(k);
@@ -319,9 +325,13 @@ function renderCalendar() {
   $("calEarliest").value = c.earliest; $("calLatest").value = c.latest; $("calBuffer").value = c.buffer; $("calAuto").checked = !!c.autopush;
   const wk = { ...CAL_DEFAULTS.work, ...(c.work || {}) };
   $("workActive").checked = !!wk.active; $("workFrom").value = wk.from; $("workTo").value = wk.to; $("workDoneBy").value = wk.doneBy || "";
+  const titles = [...new Set([...(data?.calendars || []), ...(data?.busy || []).map(b => b.cal).filter(Boolean)])].sort();
+  const ex = new Set(c.exclude || []);
+  $("calListHint").textContent = titles.length ? "Abgewählte Kalender zählen nicht als belegt (z. B. ein geteilter Kalender)." : "Die Liste erscheint nach dem nächsten Lauf der Tages-Automatik in Scriptable.";
+  $("calList").innerHTML = titles.map(t => `<label class="chip"><input type="checkbox" value="${esc(t)}" ${ex.has(t) ? "" : "checked"}> ${esc(t)}</label>`).join("");
   $("workDays").innerHTML = WEEKDAYS.map((n, i) => `<label class="chip"><input type="checkbox" value="${i}" ${wk.days.includes(i) ? "checked" : ""}> ${n}</label>`).join("");
   const fmtTs = s => s ? new Date(s).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–";
-  const now = Date.now(), next = data ? data.busy.filter(b => b.e > now && b.s < now + 14 * 864e5).length : 0;
+  const now = Date.now(), exS = new Set(c.exclude || []), next = data ? data.busy.filter(b => !exS.has(b.cal) && b.e > now && b.s < now + 14 * 864e5).length : 0;
   let st = !S.icu?.key ? "Zuerst intervals.icu unter „Leistung“ verbinden."
     : !data ? "Noch keine Termine empfangen. Richte die Tages-Automatik ein (Anleitung unten)."
     : `${next} Termine in den nächsten 14 Tagen · empfangen ${fmtTs(data.received || data.fetched)} · geprüft ${fmtTs(cal.lastCheck)}` +
@@ -339,12 +349,14 @@ function calBindUi() {
     S.settings.cal = { earliest: $("calEarliest").value || CAL_DEFAULTS.earliest, latest: $("calLatest").value || CAL_DEFAULTS.latest,
       buffer: Math.max(0, +$("calBuffer").value || 0), horizon: 14, autopush: $("calAuto").checked,
       work: { active: $("workActive").checked, from: $("workFrom").value || CAL_DEFAULTS.work.from, to: $("workTo").value || CAL_DEFAULTS.work.to, doneBy: $("workDoneBy").value || "",
-              days: [...document.querySelectorAll("#workDays input:checked")].map(x => +x.value) } };
+              days: [...document.querySelectorAll("#workDays input:checked")].map(x => +x.value) },
+      exclude: document.querySelectorAll("#calList input").length ? [...document.querySelectorAll("#calList input:not(:checked)")].map(x => x.value) : (calCfg().exclude || []) };
     applyCalendar(); save(); renderAll();
     autoCalendarSync(); // geänderte Einstellungen an die Automatik weitergeben und Plan senden
   };
   ["calEarliest", "calLatest", "calBuffer", "calAuto", "workActive", "workFrom", "workTo", "workDoneBy"].forEach(id => $(id).addEventListener("change", saveCfg));
   $("workDays").addEventListener("change", saveCfg);
+  $("calList").addEventListener("change", saveCfg);
   $("calSync").onclick = async e => {
     busy(e.target, true, "Prüfe …");
     try { await autoCalendarSync({ silent: false }); msg("calMsg", "Kalender geprüft und Plan angepasst."); }

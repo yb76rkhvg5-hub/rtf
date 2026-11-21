@@ -232,6 +232,10 @@ function calBindUi() {
     catch (err) { msg("calMsg", "Test fehlgeschlagen: " + esc(err.message), false); }
     busy(e.target, false);
   };
+  $("calPromptCopy").onclick = async () => {
+    try { await navigator.clipboard.writeText($("calPrompt").value); msg("calMsg", "Beschreibung kopiert – jetzt in Kurzbefehle einfügen."); }
+    catch { $("calPrompt").select(); msg("calMsg", "Bitte den markierten Text manuell kopieren.", false); }
+  };
   $("calCopy").onclick = async () => {
     try { await navigator.clipboard.writeText($("calHeader").value); msg("calMsg", "Header-Wert kopiert."); }
     catch { $("calHeader").select(); msg("calMsg", "Bitte den markierten Wert manuell kopieren.", false); }

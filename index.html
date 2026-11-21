@@ -318,7 +318,17 @@
   </div>
   <div class="card">
     <h2>Kurzbefehl einrichten</h2>
-    <p class="muted">Einmalig in der App „Kurzbefehle“. Übertragen werden nur Beginn und Ende deiner Termine – keine Titel, Orte oder Teilnehmer. Ganztägige Termine ignoriert RTF.</p>
+    <p class="muted">Einmalig in der App „Kurzbefehle“. Übertragen werden nur Beginn und Ende deiner Termine – keine Titel, Orte oder Teilnehmer. Ganztägige Termine ignoriert RoadToFTP.</p>
+    <h3 style="margin-top:4px">Am einfachsten (iOS 27): per Beschreibung</h3>
+    <ol class="steps">
+      <li>Text unten kopieren.</li>
+      <li>Kurzbefehle öffnen → neuen Kurzbefehl → <b>mit Beschreibung erstellen</b> und den Text einfügen.</li>
+      <li>Im fertigen Kurzbefehl bei „Inhalt von URL abrufen“ den Header-Wert <code>HIER_HEADER_EINFÜGEN</code> durch den Wert ganz unten ersetzen (Taste „Kopieren“). So gelangt dein Schlüssel nicht in die Beschreibung.</li>
+      <li>Einmal ausführen, Zugriffe erlauben, dann hier „Jetzt prüfen“.</li>
+    </ol>
+    <textarea id="calPrompt" readonly rows="8" style="width:100%;font:inherit;font-size:13px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--soft);color:var(--ink)">Erstelle einen Kurzbefehl namens „RTF Kalender“: Suche alle Kalenderereignisse, die in den nächsten 14 Tagen beginnen, sortiert nach Startdatum. Erzeuge für jedes Ereignis eine Textzeile im Format Startdatum|Enddatum, beide Datumswerte im Format ISO 8601 mit Uhrzeit. Verbinde alle Zeilen mit Zeilenumbrüchen. Sende dann mit „Inhalt von URL abrufen“ eine POST-Anfrage an https://intervals.icu/api/v1/athlete/0/events mit dem Header Authorization = HIER_HEADER_EINFÜGEN und einem JSON-Anfragetext mit den Textfeldern category = NOTE, start_date_local = 2000-01-01T00:00:00, name = RTF Kalender und description = die verbundenen Zeilen.</textarea>
+    <div class="row" style="margin:8px 0 4px"><button class="btn sec" id="calPromptCopy">Beschreibung kopieren</button></div>
+    <h3>Oder von Hand (ältere Oberfläche)</h3>
     <ol class="steps">
       <li>Kurzbefehle öffnen → <b>+</b> → Name <b>RTF Kalender</b>.</li>
       <li>Aktion <b>Kalenderereignisse suchen</b> hinzufügen. Filter: <i>Startdatum</i> · <i>liegt in den nächsten</i> · <b>14 Tage</b>. Sortieren nach <i>Startdatum</i>, Limit aus.</li>
@@ -420,10 +430,10 @@
 
 <dialog id="dlg"><div id="dlgBody"></div><p style="text-align:right;margin-bottom:0"><button class="btn sec" onclick="document.getElementById('dlg').close()">Schließen</button></p></dialog>
 
-<script src="planner.js?v=9"></script>
-<script src="charts.js?v=9"></script>
-<script src="analysis.js?v=9"></script>
-<script src="calendar.js?v=9"></script>
-<script src="app.js?v=9"></script>
+<script src="planner.js?v=10"></script>
+<script src="charts.js?v=10"></script>
+<script src="analysis.js?v=10"></script>
+<script src="calendar.js?v=10"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>

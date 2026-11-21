@@ -5,6 +5,7 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const WD = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
 const KEY = "rtf-state-v1";
+const DATA_DAYS = 180; // Zeitraum für Leistungsdaten und Analyse
 
 const DEFAULTS = {
   settings: {
@@ -48,6 +49,7 @@ function show(id) {
   document.querySelectorAll("main > section").forEach(s => s.classList.toggle("active", s.id === id));
   history.replaceState(null, "", "#" + id);
   window.scrollTo(0, 0);
+  if (id === "analyse") renderAnalysis(); // Diagramme brauchen die sichtbare Breite
 }
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => show(b.dataset.s));
 
@@ -114,7 +116,7 @@ async function icu(path, opts = {}) {
 }
 
 async function icuLoadPerformance() {
-  const today = todayIso(), oldest = isoDate(addDays(new Date(), -90));
+  const today = todayIso(), oldest = isoDate(addDays(new Date(), -DATA_DAYS));
   const [ath, wellness, acts] = await Promise.all([
     icu(""), icu(`/wellness?oldest=${oldest}&newest=${today}`), icu(`/activities?oldest=${oldest}&newest=${today}`),
   ]);
@@ -122,12 +124,16 @@ async function icuLoadPerformance() {
   const list = (acts || []).filter(a => a.start_date_local).map(a => ({
     date: a.start_date_local.slice(0, 10), name: a.name || a.type, type: a.type,
     minutes: Math.round((a.moving_time || a.elapsed_time || 0) / 60),
-    np: a.icu_weighted_avg_watts || null, hr: a.average_heartrate || null,
-    tss: a.icu_training_load ?? null,
+    km: a.distance ? Math.round(a.distance / 100) / 10 : 0, elev: Math.round(a.total_elevation_gain || 0),
+    np: a.icu_weighted_avg_watts || null, power: !!a.device_watts || !!a.icu_weighted_avg_watts,
+    hr: a.average_heartrate || null, tss: a.icu_training_load ?? null,
   }));
-  const perf = analyzeActivities(list, ride?.ftp || S.settings.ftp);
-  const w = (wellness || []).filter(x => x.ctl != null).pop();
-  if (w) { perf.ctl = +w.ctl.toFixed(1); perf.atl = +w.atl.toFixed(1); perf.tsb = +(w.ctl - w.atl).toFixed(1); }
+  const perf = analyzeActivities(list, ride?.ftp || S.settings.ftp, DATA_DAYS);
+  // Fitness/Ermüdung von intervals.icu übernehmen, wo vorhanden
+  const wmap = Object.fromEntries((wellness || []).filter(x => x.ctl != null).map(x => [x.id, x]));
+  for (const p of perf.series) if (wmap[p.date]) { p.ctl = +wmap[p.date].ctl.toFixed(1); p.atl = +wmap[p.date].atl.toFixed(1); }
+  const w = perf.series.at(-1);
+  perf.ctl = w.ctl; perf.atl = w.atl; perf.tsb = +(w.ctl - w.atl).toFixed(1);
   perf.source = "intervals.icu";
   perf.icu_ftp = ride?.ftp || null;
   perf.icu_weight = ath.icu_weight || ath.weight || null;
@@ -203,7 +209,7 @@ async function stravaGet(path) {
   return r.json();
 }
 async function stravaLoadPerformance() {
-  const after = Math.floor(Date.now() / 1000 - 90 * 86400);
+  const after = Math.floor(Date.now() / 1000 - DATA_DAYS * 86400);
   let acts = [], page = 1;
   for (;;) {
     const b = await stravaGet(`/athlete/activities?after=${after}&per_page=100&page=${page}`);
@@ -212,22 +218,11 @@ async function stravaLoadPerformance() {
     page++;
   }
   const ath = await stravaGet("/athlete");
-  const ftp = S.settings.ftp;
   const list = acts.map(a => ({ date: a.start_date_local.slice(0, 10), name: a.name, type: a.sport_type || a.type,
-    minutes: Math.round(a.moving_time / 60), np: a.device_watts ? a.weighted_average_watts : null, hr: a.average_heartrate || null }));
-  const perf = analyzeActivities(list, ftp);
-  let best = null;
-  for (const a of acts) {
-    const mt = a.moving_time;
-    if (a.device_watts && a.weighted_average_watts && mt >= 1200 && mt <= 5400) {
-      const v = a.weighted_average_watts * (mt <= 2100 ? 0.95 : mt >= 3300 ? 1 : 0.97);
-      if (!best || v > best.v) best = { v, a };
-    }
-  }
-  if (best) {
-    perf.ftp_estimate = Math.round(best.v);
-    perf.ftp_estimate_source = `${best.a.name} (${best.a.start_date_local.slice(0, 10)}, ${Math.round(best.a.moving_time / 60)} min, NP ${Math.round(best.a.weighted_average_watts)} W)`;
-  }
+    minutes: Math.round(a.moving_time / 60), km: Math.round((a.distance || 0) / 100) / 10,
+    elev: Math.round(a.total_elevation_gain || 0), power: !!a.device_watts,
+    np: a.device_watts ? a.weighted_average_watts : null, hr: a.average_heartrate || null }));
+  const perf = analyzeActivities(list, S.settings.ftp, DATA_DAYS);
   perf.source = "Strava";
   perf.strava_ftp = ath.ftp || null;
   perf.strava_weight = ath.weight || null;
@@ -262,7 +257,7 @@ function renderData() {
 $("icuSave").onclick = () => { S.icu = { key: $("icuKey").value.trim(), athlete: $("icuAth").value.trim() || "0" }; save(); renderData(); msg("icuMsg", "Gespeichert."); };
 $("icuLoad").onclick = async e => {
   busy(e.target, true, "Lade …");
-  try { S.performance = await icuLoadPerformance(); S.lastSync = new Date().toISOString(); save(); renderData(); msg("icuMsg", `${S.performance.activities} Aktivitäten der letzten 90 Tage geladen.`); }
+  try { S.performance = await icuLoadPerformance(); S.lastSync = new Date().toISOString(); save(); renderData(); renderAnalysis(); msg("icuMsg", `${S.performance.activities} Aktivitäten der letzten ${DATA_DAYS} Tage geladen.`); }
   catch (err) { msg("icuMsg", esc(err.message), false); }
   busy(e.target, false);
 };
@@ -281,7 +276,7 @@ $("stravaCode").onclick = async () => {
 };
 $("stravaLoad").onclick = async e => {
   busy(e.target, true, "Lade …");
-  try { S.performance = await stravaLoadPerformance(); S.lastSync = new Date().toISOString(); save(); renderData(); msg("stravaMsg", `${S.performance.activities} Aktivitäten der letzten 90 Tage analysiert.`); }
+  try { S.performance = await stravaLoadPerformance(); S.lastSync = new Date().toISOString(); save(); renderData(); renderAnalysis(); msg("stravaMsg", `${S.performance.activities} Aktivitäten der letzten ${DATA_DAYS} Tage analysiert.`); }
   catch (err) { msg("stravaMsg", esc(err.message), false); }
   busy(e.target, false);
 };
@@ -419,7 +414,7 @@ $("restoreFile").onchange = async e => {
 $("resetBtn").onclick = () => { if (confirm("Alle RTF-Daten auf diesem Gerät löschen?")) { localStorage.removeItem(KEY); S = load(); renderAll(); show("ziel"); } };
 
 // ================================================================ Start
-function renderAll() { renderForm(); renderData(); renderPlan(); }
+function renderAll() { renderForm(); renderData(); renderPlan(); renderAnalysis(); }
 document.querySelectorAll("[data-generate]").forEach(b => b.onclick = () => generate(b.dataset.generate));
 $("todayBtn").onclick = () => $("currentWeek")?.scrollIntoView({ behavior: "smooth", block: "start" });
 

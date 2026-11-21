@@ -352,14 +352,36 @@ function activityTss(a, ftp) {
   return h * (RIDE_TYPES.has(a.type) ? 55 : a.type === "WeightTraining" ? 30 : 60);
 }
 
-function analyzeActivities(acts, ftp) {
+// FTP-Schätzung aus Fahrten mit Leistungsmesser (20–90 min, gewichtete Leistung)
+function estimateFtp(acts) {
+  let best = null;
+  for (const a of acts) {
+    if (!a.np || !a.power || a.minutes < 20 || a.minutes > 90 || !RIDE_TYPES.has(a.type)) continue;
+    const v = a.np * (a.minutes <= 35 ? 0.95 : a.minutes >= 55 ? 1 : 0.97);
+    if (!best || v > best.v) best = { v, a };
+  }
+  return best;
+}
+
+function analyzeActivities(acts, ftp, days = 180) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const daily = {};
   for (const a of acts) daily[a.date] = (daily[a.date] || 0) + activityTss(a, ftp);
   let ctl = 0, atl = 0;
-  for (let d = addDays(today, -90); d <= today; d = addDays(d, 1)) {
-    const t = daily[isoDate(d)] || 0; ctl += (t - ctl) / 42; atl += (t - atl) / 7;
+  const series = [];
+  for (let d = addDays(today, -days); d <= today; d = addDays(d, 1)) {
+    const k = isoDate(d), t = daily[k] || 0;
+    ctl += (t - ctl) / 42; atl += (t - atl) / 7;
+    series.push({ date: k, tss: Math.round(t), ctl: Math.round(ctl * 10) / 10, atl: Math.round(atl * 10) / 10 });
   }
+  // Monatsbeste FTP-Schätzung (Leistungsentwicklung)
+  const months = {};
+  for (const a of acts) (months[a.date.slice(0, 7)] ||= []).push(a);
+  const ftpHistory = Object.keys(months).sort().map(m => {
+    const b = estimateFtp(months[m]);
+    return b ? { month: m, date: b.a.date, ftp: Math.round(b.v), source: `${b.a.name} (${b.a.minutes} min, NP ${Math.round(b.a.np)} W)` } : null;
+  }).filter(Boolean);
+  const best = estimateFtp(acts.filter(a => a.date > isoDate(addDays(today, -90))));
   const cut = isoDate(addDays(today, -28));
   const weeklyHours = acts.filter(a => a.date > cut).reduce((s, a) => s + a.minutes, 0) / 60 / 4;
   const weekly = {};
@@ -376,8 +398,49 @@ function analyzeActivities(acts, ftp) {
       .map(w => ({ week: w.week, hours: Math.round(w.hours * 10) / 10, tss: Math.round(w.tss) })),
     recent: [...acts].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 15)
       .map(a => ({ ...a, tss: Math.round(activityTss(a, ftp)) })),
+    // für die Analyse-Seite
+    days, series, ftp_history: ftpHistory,
+    ftp_estimate: best ? Math.round(best.v) : null,
+    ftp_estimate_source: best ? `${best.a.name} (${best.a.date}, ${best.a.minutes} min, NP ${Math.round(best.a.np)} W)` : null,
+    activities_list: [...acts].sort((a, b) => a.date.localeCompare(b.date))
+      .map(a => ({ ...a, tss: Math.round(activityTss(a, ftp)) })),
   };
 }
 
+// ---------------------------------------------------------------- Prognose
+// Fitness/Ermüdung ab heute mit den geplanten Einheiten fortschreiben
+function projectLoad(perf, plan) {
+  const last = perf?.series?.at(-1);
+  if (!last || !plan) return [];
+  const planned = {};
+  for (const w of plan.weeks) for (const d of w.days) planned[d.date] = (planned[d.date] || 0) + (d.workout.tss || 0);
+  const end = parseDate(plan.weeks.at(-1).days.at(-1)?.date || plan.weeks.at(-1).start);
+  let ctl = last.ctl, atl = last.atl;
+  const out = [];
+  for (let d = addDays(parseDate(last.date), 1); d <= addDays(end, 0); d = addDays(d, 1)) {
+    const k = isoDate(d), t = planned[k] || 0;
+    ctl += (t - ctl) / 42; atl += (t - atl) / 7;
+    out.push({ date: k, tss: t, ctl: Math.round(ctl * 10) / 10, atl: Math.round(atl * 10) / 10 });
+  }
+  return out;
+}
+
+// FTP-Prognose nach Faustregeln: Zuwachs pro Woche je Phase (Anteil der FTP), mit Spanne
+const FTP_GAIN = { base: 0.004, build: 0.008, peak: 0.005, recovery: 0.001, taper: 0, test: 0 };
+function projectFtp(ftp, plan, weightKg) {
+  if (!plan) return [];
+  // Abnehmender Zuwachs bei hoher W/kg
+  const wkg = weightKg ? ftp / weightKg : 3;
+  const damp = wkg > 4 ? 0.6 : wkg > 3.5 ? 0.8 : 1;
+  let lo = ftp, mid = ftp, hi = ftp;
+  const out = [{ date: plan.weeks[0].start, lo, mid, hi }];
+  for (const w of plan.weeks) {
+    const g = (FTP_GAIN[w.phase] ?? 0) * damp;
+    lo *= 1 + g * 0.5; mid *= 1 + g; hi *= 1 + g * 1.5;
+    out.push({ date: isoDate(addDays(parseDate(w.start), 7)), phase: w.phase, lo: Math.round(lo), mid: Math.round(mid), hi: Math.round(hi) });
+  }
+  return out;
+}
+
 if (typeof module !== "undefined") module.exports = { GOALS, HARD_TYPES, generatePlan, buildWorkout, workoutToZwo,
-  workoutToIcuText, planToIcs, analyzeActivities, isoDate, addDays };
+  workoutToIcuText, planToIcs, analyzeActivities, projectLoad, projectFtp, estimateFtp, isoDate, addDays, parseDate };

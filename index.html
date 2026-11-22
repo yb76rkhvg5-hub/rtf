@@ -11,6 +11,9 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://intervals.icu https://www.strava.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<script src="lock.js?v=16"></script>
 <title>RoadToFTP</title>
 <style>
   :root { color-scheme: light;
@@ -290,7 +293,18 @@
   .tip { border-left-width: 3px; background: var(--soft); border-radius: 0 12px 12px 0; padding: 12px 14px; }
   .hb-t { height: 10px; border-radius: 5px; } .hb-b { border-radius: 5px; }
   .menu-panel { border: 0; border-radius: 18px; box-shadow: 0 16px 40px rgba(0,0,0,.18), inset 0 0 0 1px var(--line); }
-</style>
+  /* Sperre & Hinweis */
+  .lock { display:none; }
+  html.locked .lock { display:flex; position:fixed; inset:0; z-index:100; flex-direction:column; align-items:center; justify-content:center; gap:16px;
+                      background: radial-gradient(900px 500px at 100% 0%, var(--glow1), transparent 60%), var(--bg); padding:24px; text-align:center; }
+  html.locked body > header, html.locked body > main, html.locked body > nav { visibility:hidden; }
+  .lock-logo { width:72px; height:72px; border-radius:18px; box-shadow: var(--shadow); }
+  .lock-title { font-size:26px; font-weight:500; letter-spacing:-.02em; } .lock-title b { font-weight:800; }
+  .toast { position:fixed; left:50%; top:calc(12px + var(--safe-t)); transform:translate(-50%,-140%); z-index:50; background:var(--card); color:var(--ink);
+           padding:10px 16px; border-radius:16px; font-size:14px; font-weight:600; box-shadow:0 10px 30px rgba(0,0,0,.18), inset 0 0 0 1px var(--line);
+           transition: transform .35s cubic-bezier(.2,.8,.2,1); pointer-events:none; max-width:calc(100% - 32px); }
+  .toast.show { transform:translate(-50%,0); }
+  .toast::before { content:""; display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--grad); margin-right:8px; vertical-align:1px; }</style>
 </head>
 <body>
 <header>
@@ -486,6 +500,17 @@
     <p class="muted">Einzelne Zwift-Dateien (<code>.zwo</code>) für den PC gibt es in jeder Einheit im Plan.</p>
   </div>
   <div class="card">
+    <h2>Sicherheit</h2>
+    <label class="chip" style="display:inline-flex"><input type="checkbox" id="lockToggle"> App mit Face ID sperren</label>
+    <p class="muted">Beim Öffnen und nach 5 Minuten im Hintergrund fragt RoadToFTP nach Face ID. Die Prüfung läuft auf dem iPhone, nichts verlässt das Gerät.</p>
+    <ul class="facts">
+      <li>Schlüssel und Daten liegen nur auf diesem Gerät und werden nur an intervals.icu und Strava gesendet – die App darf technisch mit keinem anderen Dienst sprechen.</li>
+      <li>Sicherungen enthalten deine Schlüssel nur, wenn du es ausdrücklich auswählst.</li>
+      <li>Empfehlung: Bei GitHub die Zwei-Faktor-Anmeldung aktivieren – dort liegt der Code, den auch die Kalender-Automatik lädt.</li>
+    </ul>
+    <div id="secMsg"></div>
+  </div>
+  <div class="card">
     <h2>Sicherung</h2>
     <p class="muted">Alle Daten liegen nur auf diesem Gerät. Mit einer Sicherung überträgst du sie auf ein anderes Gerät.</p>
     <label class="chip" style="display:inline-flex;margin-bottom:10px"><input type="checkbox" id="backupSecrets"> API-Key und Strava-Zugang mitsichern</label>
@@ -504,12 +529,14 @@
   <button data-s="analyse"><svg viewBox="0 0 24 24"><path d="M4 20h16M7 16v-5M12 16V6M17 16v-8"/></svg>Analyse</button>
 </nav>
 
-<dialog id="dlg"><div id="dlgBody"></div><p style="text-align:right;margin-bottom:0"><button class="btn sec" onclick="document.getElementById('dlg').close()">Schließen</button></p></dialog>
+<div id="lock" class="lock"><img src="logo.svg" alt="" class="lock-logo"><div class="lock-title">RoadTo<b>FTP</b></div><button class="btn" id="lockBtn">Mit Face ID entsperren</button><p class="muted" id="lockMsg"></p></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<dialog id="dlg"><div id="dlgBody"></div><p style="text-align:right;margin-bottom:0"><button class="btn sec" id="dlgClose">Schließen</button></p></dialog>
 
-<script src="planner.js?v=15"></script>
-<script src="charts.js?v=15"></script>
-<script src="analysis.js?v=15"></script>
-<script src="calendar.js?v=15"></script>
-<script src="app.js?v=15"></script>
+<script src="planner.js?v=16"></script>
+<script src="charts.js?v=16"></script>
+<script src="analysis.js?v=16"></script>
+<script src="calendar.js?v=16"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>

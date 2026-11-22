@@ -324,7 +324,7 @@ function renderPerf() {
     ${kpi(p.ftp_estimate ? p.ftp_estimate + " W" : null, "FTP-Schätzung")}</div>`;
   const ftps = [["intervals.icu", p.icu_ftp], ["Strava", p.strava_ftp], ["Schätzung", p.ftp_estimate]].filter(x => x[1]);
   if (ftps.length) h += `<p class="muted">Eingestellt: ${S.settings.ftp} W. ` +
-    ftps.map(([n, v]) => `<button class="btn sec sm" onclick="takeFtp(${v})">${n} übernehmen (${v} W)</button>`).join(" ") + `</p>`;
+    ftps.map(([n, v]) => `<button class="btn sec sm" data-ftp="${Number(v)}">${n} übernehmen (${Number(v)} W)</button>`).join(" ") + `</p>`;
   if (p.ftp_estimate_source) h += `<p class="muted">Schätzung (berechnet, nicht gemessen) aus: ${esc(p.ftp_estimate_source)}</p>`;
   if (p.weeks?.length) {
     const mx = Math.max(...p.weeks.map(w => w.tss), 1);
@@ -336,6 +336,7 @@ function renderPerf() {
   h += `<p class="muted">Quelle: ${esc(p.source || "–")} · Stand ${esc((p.updated || "").replace("T", " "))}. TSS ohne Leistungsmesser ist geschätzt.
         Der Plan startet mit deinem Ø-Umfang und entschärft die erste Woche bei starker Ermüdung.</p>`;
   $("perfCard").innerHTML = h;
+  $("perfCard").querySelectorAll("[data-ftp]").forEach(b => b.onclick = () => takeFtp(+b.dataset.ftp)); // ohne Inline-Handler (CSP)
 }
 window.takeFtp = v => {
   S.settings.ftp = v; save(); renderForm(); renderPerf();
@@ -513,6 +514,49 @@ $("restoreFile").onchange = async e => {
 };
 $("resetBtn").onclick = () => { if (confirm("Alle RTF-Daten auf diesem Gerät löschen?")) { localStorage.removeItem(KEY); S = load(); renderAll(); show("ziel"); } };
 
+// ================================================================ Sicherheit
+$("dlgClose").onclick = () => $("dlg").close();
+function renderSecurity() { $("lockToggle").checked = !!S.ui.lock?.credId; }
+$("lockToggle").onchange = async e => {
+  if (e.target.checked) {
+    try { S.ui.lock = { credId: await RTFLock.enable() }; save(); msg("secMsg", "Face-ID-Sperre ist aktiv."); }
+    catch (err) { e.target.checked = false; msg("secMsg", esc(err.message || "Face ID konnte nicht eingerichtet werden."), false); }
+  } else {
+    // Ausschalten nur nach erfolgreicher Bestätigung
+    if (await RTFLock.unlock()) { S.ui.lock = null; save(); msg("secMsg", "Face-ID-Sperre ist ausgeschaltet."); }
+    else e.target.checked = true;
+  }
+};
+
+// ================================================================ Neue Aktivitäten automatisch laden
+function toast(text) {
+  const t = $("toast"); t.textContent = text; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 3500);
+}
+let _refreshing = false;
+/** Holt die neuesten Aktivitäten (intervals.icu bevorzugt, sonst Strava) – höchstens alle 5 Minuten */
+async function autoRefreshData({ force = false } = {}) {
+  if (_refreshing || !navigator.onLine || document.visibilityState === "hidden") return;
+  if (!S.icu?.key && !S.strava?.refresh_token) return;
+  if (!force && S.lastSync && Date.now() - new Date(S.lastSync) < 5 * 60 * 1000) return;
+  _refreshing = true;
+  try {
+    const before = new Set((S.performance?.activities_list || []).map(a => `${a.date}|${a.time}|${a.type}|${a.minutes}`));
+    const perf = S.icu?.key ? await icuLoadPerformance() : await stravaLoadPerformance();
+    if (perf.activities) {
+      const fresh = (perf.activities_list || []).filter(a => !before.has(`${a.date}|${a.time}|${a.type}|${a.minutes}`));
+      S.performance = perf; S.lastSync = new Date().toISOString(); S.syncError = null; save();
+      renderData();
+      if ($("analyse").classList.contains("active")) renderAnalysis();
+      if (before.size && fresh.length) toast(fresh.length === 1 ? `Neue Aktivität: ${fresh[0].name || TYPE_LABELS?.[fresh[0].type] || fresh[0].type}` : `${fresh.length} neue Aktivitäten geladen`);
+    }
+  } catch (e) { S.syncError = e.message; save(); }
+  finally { _refreshing = false; }
+}
+window.addEventListener("online", () => autoRefreshData({ force: true }));
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") autoRefreshData(); });
+setInterval(() => autoRefreshData(), 10 * 60 * 1000); // solange die App offen ist
+
 // ================================================================ Start
 function renderAll() { renderForm(); renderData(); renderPlan(); renderCalendar(); if ($("analyse").classList.contains("active")) renderAnalysis(); }
 document.querySelectorAll("[data-generate]").forEach(b => b.onclick = () => generate(b.dataset.generate));
@@ -524,5 +568,7 @@ const h = location.hash.slice(1);
 show(h && TITLES[h] ? h : (S.plan ? "plan" : "ziel"));
 handleOAuthReturn();
 autoCalendarSync(); // Termine holen, Plan anpassen, automatisch senden
+autoRefreshData();  // neueste Aktivitäten holen
+renderSecurity();
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") autoCalendarSync(); });
 if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => {});

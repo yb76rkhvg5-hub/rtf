@@ -10,6 +10,14 @@
   const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   const rnd = n => crypto.getRandomValues(new Uint8Array(n));
 
+  // Schutz gegen Einbetten (Clickjacking): In einem fremden Rahmen wird nichts angezeigt.
+  // GitHub Pages erlaubt keine eigenen Server-Regeln (frame-ancestors), daher hier im Skript.
+  if (window.top !== window.self) {
+    document.documentElement.style.display = "none";
+    try { window.top.location.replace(window.self.location.href); } catch { /* fremde Seite blockiert die Umleitung – bleibt leer */ }
+    return;
+  }
+
   // So früh wie möglich sperren (dieses Skript läuft im <head>, bevor Inhalte gezeichnet werden)
   if (credId()) document.documentElement.classList.add("locked");
 

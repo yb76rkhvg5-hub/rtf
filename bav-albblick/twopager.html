@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>bAV Hotel Albblick</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --az:#003781;        /* Allianz-Blau */
+    --az-deep:#00225a;
+    --az-soft:#e8eef8;
+    --gold:#fccc07;      /* Albblick-Gelb */
+    --brown:#3a3329;     /* Albblick-Braun */
+    --sand:#f6f1e8;
+    --ink:#1f2430;
+    --muted:#5b6170;
+    --line:#dfe3ea;
+  }
+  @page{ size:A4; margin:0; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ background:#d9dde3; }
+  body{ font-family:Inter, system-ui, sans-serif; color:var(--ink); font-size:9.6pt; line-height:1.45; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .page{ width:210mm; height:297mm; margin:10mm auto; background:#fff; position:relative; overflow:hidden; display:flex; flex-direction:column; }
+  @media print{ html,body{background:#fff;} .page{ margin:0; page-break-after:always; } }
+
+  /* ---------- Kopf ---------- */
+  .topbar{ display:flex; align-items:center; justify-content:space-between; padding:9mm 14mm 6mm; }
+  .topbar .albblick{ height:17mm; }
+  .topbar .allianz{ height:8mm; }
+  .topbar .x{ color:var(--muted); font-size:8pt; letter-spacing:.12em; text-transform:uppercase; display:flex; align-items:center; gap:4mm; }
+  .topbar .x::before,.topbar .x::after{ content:""; width:10mm; height:1px; background:var(--line); }
+
+  .hero{ background:var(--az); color:#fff; padding:11mm 14mm 10mm; position:relative; }
+  .hero::after{ content:""; position:absolute; left:0; right:0; bottom:0; height:2.2mm; background:var(--gold); }
+  .eyebrow{ font-size:8pt; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--gold); margin-bottom:3mm; }
+  .hero h1{ font-family:Fraunces, Georgia, serif; font-weight:600; font-size:27pt; line-height:1.08; letter-spacing:-.01em; max-width:150mm; }
+  .hero p{ margin-top:4mm; font-size:11pt; line-height:1.5; color:#d7e2f4; max-width:150mm; }
+
+  .content{ padding:8mm 14mm 0; flex:1; display:flex; flex-direction:column; gap:7mm; }
+  h2{ font-size:13pt; font-weight:700; color:var(--az); letter-spacing:-.005em; margin-bottom:3mm; display:flex; align-items:center; gap:3mm; }
+  h2 .num{ width:7mm; height:7mm; border-radius:50%; background:var(--gold); color:var(--brown); font-size:9pt; display:inline-grid; place-items:center; font-weight:800; flex:none; }
+  .lead{ color:var(--muted); max-width:170mm; }
+
+  /* Vorteile */
+  .benefits{ display:grid; grid-template-columns:repeat(3,1fr); gap:4mm; }
+  .card{ background:var(--sand); border-radius:3mm; padding:5mm; }
+  .card .ico{ width:9mm; height:9mm; border-radius:2.2mm; background:var(--az); display:grid; place-items:center; margin-bottom:3mm; }
+  .card .ico svg{ width:5mm; height:5mm; stroke:#fff; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .card h3{ font-size:10.5pt; font-weight:700; color:var(--brown); margin-bottom:1.5mm; }
+  .card p{ color:#4a4a4a; font-size:9pt; }
+
+  /* So funktioniert's */
+  .flow{ display:grid; grid-template-columns:1fr 7mm 1fr 7mm 1fr; align-items:stretch; }
+  .step{ border:1px solid var(--line); border-radius:3mm; padding:4.5mm; }
+  .step .k{ font-size:7.5pt; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--az); }
+  .step .v{ font-size:10.5pt; font-weight:700; margin:1mm 0 1.5mm; }
+  .step p{ font-size:8.8pt; color:var(--muted); }
+  .arrow{ display:grid; place-items:center; color:var(--gold); font-size:15pt; font-weight:800; }
+
+  /* Zuschuss-Highlight */
+  .highlight{ display:grid; grid-template-columns:44mm 1fr; background:var(--brown); color:#fff; border-radius:3mm; overflow:hidden; }
+  .highlight .big{ background:var(--gold); color:var(--brown); display:flex; flex-direction:column; justify-content:center; align-items:center; padding:5mm; text-align:center; }
+  .highlight .big b{ font-family:Fraunces, Georgia, serif; font-size:30pt; line-height:1; }
+  .highlight .big > span{ font-size:8pt; font-weight:600; text-transform:uppercase; letter-spacing:.1em; margin-top:1.5mm; }
+  .highlight .txt{ padding:5.5mm 6mm; }
+  .highlight h3{ font-size:11.5pt; margin-bottom:1.5mm; }
+  .highlight p{ color:#e6dfd3; font-size:9pt; }
+
+  /* Platzhalter für Konditionen */
+  .ph{ background:repeating-linear-gradient(-45deg,#fff6cc,#fff6cc 4px,#fff0b0 4px,#fff0b0 8px); color:#6b5600; border-radius:1mm; padding:0 1.5mm; font-weight:700; white-space:nowrap; }
+  .highlight .ph{ color:var(--brown); } .highlight .big .ph{ font-size:inherit; background:none; padding:0; } .contact .cta .ph{ background:var(--gold); color:var(--brown); font-size:inherit; }
+
+  /* Fuß */
+  .foot{ margin-top:auto; padding:5mm 14mm; display:flex; justify-content:space-between; align-items:center; font-size:7.5pt; color:var(--muted); border-top:1px solid var(--line); }
+  .foot b{ color:var(--az); }
+
+  /* ---------- Seite 2 ---------- */
+  .p2head{ background:var(--az); color:#fff; padding:7mm 14mm; display:flex; justify-content:space-between; align-items:center; position:relative; }
+  .p2head::after{ content:""; position:absolute; left:0; right:0; bottom:0; height:1.4mm; background:var(--gold); }
+  .p2head h1{ font-family:Fraunces, Georgia, serif; font-size:19pt; font-weight:600; }
+  .p2head .eyebrow{ margin-bottom:1mm; }
+  .p2head img{ height:12mm; background:#fff; border-radius:2mm; padding:1.8mm 3mm; }
+
+  .two{ display:grid; grid-template-columns:1.15fr 1fr; gap:7mm; }
+
+  table{ width:100%; border-collapse:collapse; font-size:9pt; }
+  th,td{ padding:2.3mm 2.5mm; text-align:right; border-bottom:1px solid var(--line); }
+  th:first-child,td:first-child{ text-align:left; }
+  thead th{ background:var(--az); color:#fff; font-weight:600; font-size:8pt; letter-spacing:.03em; }
+  thead th:first-child{ border-top-left-radius:2mm; } thead th:last-child{ border-top-right-radius:2mm; }
+  tbody tr:nth-child(even) td{ background:#f7f9fc; }
+  tr.sum td{ font-weight:800; color:var(--az); background:var(--az-soft) !important; border-bottom:none; }
+  .note{ font-size:7.5pt; color:var(--muted); margin-top:2mm; }
+
+  .facts{ display:grid; gap:3.6mm; }
+  .fact{ display:grid; grid-template-columns:40mm 1fr; border-bottom:1px solid var(--line); padding-bottom:2.5mm; }
+  .fact dt{ font-size:8pt; font-weight:700; color:var(--az); text-transform:uppercase; letter-spacing:.06em; padding-top:.6mm; }
+  .fact dd{ font-size:9.2pt; }
+
+  .faq{ display:grid; grid-template-columns:1fr 1fr; gap:3.5mm 7mm; }
+  .faq div{ border-left:1.2mm solid var(--gold); padding-left:3.5mm; }
+  .faq h4{ font-size:9.6pt; color:var(--brown); margin-bottom:1mm; }
+  .faq p{ font-size:8.8pt; color:var(--muted); }
+
+  .contact{ background:var(--sand); border-radius:3mm; display:grid; grid-template-columns:1fr auto; gap:6mm; padding:6mm 7mm; align-items:center; }
+  .contact h3{ font-family:Fraunces, Georgia, serif; font-size:16pt; color:var(--brown); font-weight:600; }
+  .contact .role{ color:var(--az); font-weight:600; font-size:9pt; margin:0.5mm 0 3mm; }
+  .contact ul{ list-style:none; display:grid; grid-template-columns:auto auto; gap:1.2mm 8mm; font-size:9pt; }
+  .contact li span{ color:var(--muted); display:inline-block; width:14mm; }
+  .contact .cta{ background:var(--az); color:#fff; border-radius:2.5mm; padding:5mm 6mm; text-align:center; width:52mm; }
+  .contact .cta b{ display:block; font-size:11pt; margin-bottom:1mm; }
+  .contact .cta span{ font-size:8.3pt; color:#cbd8ee; }
+  .contact .allianz{ height:6mm; margin-bottom:3mm; }
+
+  .legal{ font-size:6.8pt; color:#8a8f99; line-height:1.4; }
+  .page.p2 .content{ gap:10mm; padding-top:10mm; }
+  .page.p2 th, .page.p2 td{ padding:2.8mm 2.5mm; }
+</style>
+</head>
+<body>
+
+<!-- ======================= SEITE 1 ======================= -->
+<section class="page">
+  <div class="topbar">
+    <img class="albblick" src="assets/albblick-logo.svg" alt="Vital- und Wellnesshotel Albblick">
+    <div class="x">in Partnerschaft mit</div>
+    <img class="allianz" src="assets/allianz-logo.svg" alt="Allianz">
+  </div>
+
+  <div class="hero">
+    <div class="eyebrow">Betriebliche Altersversorgung · für unser Team</div>
+    <h1>Mehr Zukunft für alle, die das Albblick jeden Tag besonders machen.</h1>
+    <p>Mit der betrieblichen Altersversorgung (bAV) baut ihr steuer- und sozialabgabenbegünstigt eine zusätzliche Rente auf – und das Hotel legt etwas obendrauf.</p>
+  </div>
+
+  <div class="content">
+    <div>
+      <h2><span class="num">1</span>Eure Vorteile auf einen Blick</h2>
+      <div class="benefits">
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+          <h3>Netto günstiger sparen</h3>
+          <p>Der Beitrag geht direkt vom Bruttolohn ab. Steuern und Sozialabgaben sinken – ein Teil eures Beitrags wird so vom Staat mitfinanziert.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M20 12v10H4V12M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></div>
+          <h3>Zuschuss vom Hotel</h3>
+          <p>Das Hotel Albblick beteiligt sich an eurer Vorsorge mit einem Arbeitgeberzuschuss von <span class="ph">[folgt]</span>.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div>
+          <h3>Sicher &amp; flexibel</h3>
+          <p>Lebenslange Rente oder Kapital, bei Jobwechsel mitnehmbar und durch die Allianz als starken Partner abgesichert.</p>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h2><span class="num">2</span>So funktioniert’s</h2>
+      <div class="flow">
+        <div class="step"><div class="k">Schritt 1</div><div class="v">Beitrag wählen</div><p>Ihr legt fest, wie viel vom Bruttogehalt monatlich in die Vorsorge fließt – schon ab kleinen Beträgen.</p></div>
+        <div class="arrow">→</div>
+        <div class="step"><div class="k">Schritt 2</div><div class="v">Hotel gibt dazu</div><p>Der Arbeitgeberzuschuss wird automatisch ergänzt und mit eingezahlt.</p></div>
+        <div class="arrow">→</div>
+        <div class="step"><div class="k">Schritt 3</div><div class="v">Rente genießen</div><p>Ab Rentenbeginn erhaltet ihr eine lebenslange Zusatzrente oder eine Kapitalauszahlung.</p></div>
+      </div>
+    </div>
+
+    <div class="highlight">
+      <div class="big"><b><span class="ph">xx %</span></b><span>Zuschuss vom Hotel</span></div>
+      <div class="txt">
+        <h3>Das Albblick investiert in euch.</h3>
+        <p>Zusätzlich zum gesetzlichen Pflichtzuschuss beteiligt sich das Hotel mit <span class="ph">[Konditionen folgen]</span> an eurer Altersvorsorge. Damit wird aus jedem Euro, den ihr einzahlt, deutlich mehr.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>Vital- und Wellnesshotel Albblick · Tumlinger Weg 30 · 72178 Waldachtal</span>
+    <span>Betreuung: <b>Allianz Agentur Elena Ruepp</b></span>
+  </div>
+</section>
+
+<!-- ======================= SEITE 2 ======================= -->
+<section class="page p2">
+  <div class="p2head">
+    <div>
+      <div class="eyebrow">Betriebliche Altersversorgung</div>
+      <h1>Zahlen, Konditionen &amp; Ansprechpartnerin</h1>
+    </div>
+    <img src="assets/albblick-logo.svg" alt="Hotel Albblick">
+  </div>
+
+  <div class="content">
+    <div class="two">
+      <div>
+        <h2><span class="num">3</span>Rechenbeispiel</h2>
+        <table>
+          <thead><tr><th>monatlich</th><th>ohne bAV</th><th>mit bAV</th></tr></thead>
+          <tbody>
+            <tr><td>Bruttogehalt</td><td><span class="ph">x.xxx €</span></td><td><span class="ph">x.xxx €</span></td></tr>
+            <tr><td>Entgeltumwandlung</td><td>–</td><td><span class="ph">– xxx €</span></td></tr>
+            <tr><td>Steuern &amp; Sozialabgaben</td><td><span class="ph">– xxx €</span></td><td><span class="ph">– xxx €</span></td></tr>
+            <tr><td>Nettogehalt</td><td><span class="ph">x.xxx €</span></td><td><span class="ph">x.xxx €</span></td></tr>
+            <tr><td>Zuschuss Hotel Albblick</td><td>–</td><td><span class="ph">+ xx €</span></td></tr>
+            <tr class="sum"><td>Gesamtbeitrag in die bAV</td><td>–</td><td><span class="ph">xxx €</span></td></tr>
+            <tr class="sum"><td>Eigener Netto-Aufwand</td><td>–</td><td><span class="ph">xx €</span></td></tr>
+          </tbody>
+        </table>
+        <p class="note">Beispielrechnung Steuerklasse <span class="ph">I</span>, gesetzlich krankenversichert, Werte <span class="ph">2026</span>. Individuelle Werte erhaltet ihr im persönlichen Gespräch.</p>
+      </div>
+
+      <div>
+        <h2><span class="num">4</span>Konditionen</h2>
+        <dl class="facts">
+          <div class="fact"><dt>Durchführungsweg</dt><dd><span class="ph">[folgt]</span></dd></div>
+          <div class="fact"><dt>Tarif</dt><dd><span class="ph">[folgt]</span></dd></div>
+          <div class="fact"><dt>AG-Zuschuss</dt><dd><span class="ph">[folgt]</span></dd></div>
+          <div class="fact"><dt>Mindestbeitrag</dt><dd><span class="ph">[folgt]</span></dd></div>
+          <div class="fact"><dt>Förderrahmen</dt><dd><span class="ph">[folgt]</span></dd></div>
+          <div class="fact"><dt>Besonderheiten</dt><dd><span class="ph">[folgt]</span></dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div>
+      <h2><span class="num">5</span>Häufige Fragen</h2>
+      <div class="faq">
+        <div><h4>Wer kann mitmachen?</h4><p>Alle Mitarbeitenden des Hotel Albblick – egal ob Service, Küche, Housekeeping, Spa oder Rezeption.</p></div>
+        <div><h4>Was passiert bei einem Jobwechsel?</h4><p>Eure Ansprüche bleiben erhalten. Der Vertrag kann mitgenommen oder beitragsfrei gestellt werden.</p></div>
+        <div><h4>Kann ich den Beitrag ändern?</h4><p>Ja – bei veränderter Lebenssituation lässt sich der Beitrag in Absprache anpassen.</p></div>
+        <div><h4>Was kostet mich die Beratung?</h4><p>Nichts. Die Beratung durch die Allianz Agentur ist für euch kostenfrei und unverbindlich.</p></div>
+      </div>
+    </div>
+
+    <div class="contact">
+      <div>
+        <img class="allianz" src="assets/allianz-logo.svg" alt="Allianz">
+        <h3>Elena Ruepp</h3>
+        <div class="role">Allianz Agentur · eure Ansprechpartnerin für die bAV</div>
+        <ul>
+          <li><span>Telefon</span><b class="ph">[folgt]</b></li>
+          <li><span>E-Mail</span><b class="ph">[folgt]</b></li>
+          <li><span>Adresse</span><b class="ph">[folgt]</b></li>
+          <li><span>Web</span><b class="ph">[folgt]</b></li>
+        </ul>
+      </div>
+      <div class="cta">
+        <b>Persönlicher Beratungstermin</b>
+        <span>Direkt im Hotel Albblick – am <span class="ph">[Datum]</span>. Einfach an der Rezeption eintragen.</span>
+      </div>
+    </div>
+
+    <p class="legal">Diese Übersicht dient der allgemeinen Information und ersetzt keine individuelle Beratung. Maßgeblich sind die jeweiligen Versicherungsbedingungen und die zum Zeitpunkt des Vertragsabschlusses geltenden steuer- und sozialversicherungsrechtlichen Regelungen. Steuer- und Sozialversicherungsvorteile hängen von den persönlichen Verhältnissen ab.</p>
+  </div>
+
+  <div class="foot">
+    <span>Vital- und Wellnesshotel Albblick · Waldachtal</span>
+    <span>Seite 2 / 2 · <b>Allianz Agentur Elena Ruepp</b></span>
+  </div>
+</section>
+
+</body>
+</html>
